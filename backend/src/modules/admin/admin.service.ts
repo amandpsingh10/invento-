@@ -2,7 +2,7 @@ import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../lib/apiError";
 import { hashPassword } from "../../lib/password";
 import type { z } from "zod";
-import type { createTenantSchema, updateTenantSchema } from "./admin.schema";
+import type { createTenantSchema, updateTenantSchema, updatePlanSchema } from "./admin.schema";
 
 export async function listTenants() {
   const tenants = await prisma.tenant.findMany({
@@ -164,5 +164,13 @@ export async function platformDashboard() {
 }
 
 export async function listPlans() {
-  return prisma.plan.findMany({ where: { isActive: true }, orderBy: { priceMonthly: "asc" } });
+  // Super Admin's own Plans page is the only caller — it needs every plan,
+  // including a deactivated one, to manage it (re-activate, adjust, etc.).
+  return prisma.plan.findMany({ orderBy: { priceMonthly: "asc" } });
+}
+
+export async function updatePlan(id: string, input: z.infer<typeof updatePlanSchema>) {
+  const plan = await prisma.plan.findUnique({ where: { id } });
+  if (!plan) throw ApiError.notFound("Plan not found");
+  return prisma.plan.update({ where: { id }, data: input });
 }

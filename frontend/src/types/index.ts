@@ -439,6 +439,23 @@ export interface LowStockRow {
   updatedAt: string;
 }
 
+export interface Plan {
+  id: string;
+  code: "TRIAL" | "BASIC" | "PRO" | "ENTERPRISE";
+  name: string;
+  description: string | null;
+  priceMonthly: string;
+  maxUsers: number;
+  maxStores: number;
+  maxParts: number;
+  maxMonthlyTxns: number;
+  maxExcelUploadRows: number;
+  maxStorageMb: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DealerTenant {
   id: string;
   dealerCode: string;

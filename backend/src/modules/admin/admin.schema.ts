@@ -27,6 +27,19 @@ export const updateTenantSchema = z.object({
   status: z.enum(["TRIAL", "ACTIVE", "SUSPENDED", "CANCELLED"]).optional(),
 });
 
+export const updatePlanSchema = z.object({
+  name: z.string().min(1, "Plan name is required").max(100).optional(),
+  description: z.string().max(300).optional().nullable(),
+  priceMonthly: z.coerce.number().min(0, "Price cannot be negative").optional(),
+  maxUsers: z.coerce.number().int().min(1, "Must allow at least 1 user").optional(),
+  maxStores: z.coerce.number().int().min(1, "Must allow at least 1 store").optional(),
+  maxParts: z.coerce.number().int().min(1, "Must allow at least 1 part").optional(),
+  maxMonthlyTxns: z.coerce.number().int().min(1, "Must allow at least 1 transaction").optional(),
+  maxExcelUploadRows: z.coerce.number().int().min(1).optional(),
+  maxStorageMb: z.coerce.number().int().min(1).optional(),
+  isActive: z.boolean().optional(),
+});
+
 export const updateMenuAccessSchema = z.object({
   items: z.array(
     z.object({

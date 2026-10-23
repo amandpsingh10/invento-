@@ -42,6 +42,7 @@ import { NotificationsPage } from "@/features/notifications/NotificationsPage";
 import { SuperAdminDashboardPage } from "@/features/super-admin/SuperAdminDashboardPage";
 import { DealersPage } from "@/features/super-admin/DealersPage";
 import { DealerUsersPage } from "@/features/super-admin/DealerUsersPage";
+import { PlansPage } from "@/features/super-admin/PlansPage";
 import { NotFoundPage } from "@/features/misc/NotFoundPage";
 import { NoAccessPage } from "@/features/misc/NoAccessPage";
 
@@ -154,6 +155,7 @@ export default function App() {
           <Route path="/super-admin/dashboard" element={<SuperAdminDashboardPage />} />
           <Route path="/super-admin/dealers" element={<DealersPage />} />
           <Route path="/super-admin/dealers/:id/users" element={<DealerUsersPage />} />
+          <Route path="/super-admin/plans" element={<PlansPage />} />
         </Route>
       </Route>
 

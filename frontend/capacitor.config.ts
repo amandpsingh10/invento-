@@ -9,12 +9,12 @@ const config: CapacitorConfig = {
   appName: "Inventory Management System",
   webDir: "dist",
   // Loads the live deployed web app directly, rather than bundling a local
-  // copy of dist/ — the APK always reflects whatever is currently deployed
-  // to Railway, with no separate rebuild-and-resign step needed when the
-  // web app changes. Requires network access at runtime (by design: the
-  // backend is a remote API either way).
+  // copy of dist/ — the APK always reflects whatever is currently deployed,
+  // with no separate rebuild-and-resign step needed when the web app
+  // changes. Requires network access at runtime (by design: the backend is
+  // a remote API either way).
   server: {
-    url: "https://frontend-production-ab54.up.railway.app",
+    url: "https://invento-frontend-i6ar.onrender.com",
     cleartext: false,
   },
   android: {

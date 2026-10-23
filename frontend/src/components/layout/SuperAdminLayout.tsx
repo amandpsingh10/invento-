@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Boxes, LayoutDashboard, Building2, LogOut, Menu, X, Sun, Moon } from "lucide-react";
+import { Boxes, LayoutDashboard, Building2, CreditCard, LogOut, Menu, X, Sun, Moon } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthContext";
 import { useTheme } from "@/features/theme/ThemeContext";
 import { cn } from "@/lib/utils";
@@ -67,6 +67,14 @@ export function SuperAdminLayout() {
             }
           >
             <Building2 className="h-4 w-4" /> Dealers
+          </NavLink>
+          <NavLink
+            to="/super-admin/plans"
+            className={({ isActive }) =>
+              cn("mb-1 flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/5 hover:text-white", isActive && "bg-brand-600/15 text-brand-300")
+            }
+          >
+            <CreditCard className="h-4 w-4" /> Plans
           </NavLink>
         </nav>
         <div className="border-t border-white/10 p-3">
