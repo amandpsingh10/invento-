@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  }
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased dark:bg-navy-950 dark:text-slate-100;
+  }
+  ::selection {
+    @apply bg-brand-200 text-brand-900 dark:bg-brand-500/30 dark:text-brand-100;
+  }
+
+  /* Tailwind's text-* utilities are rem-based, so scaling the root size
+     scales all of them together (headings, tables, buttons, forms) without
+     touching every component. Icons and a handful of text-[Npx] labels are
+     fixed px and won't shrink further — that's fine, they're already small. */
+  @media (max-width: 640px) {
+    html {
+      font-size: 14px;
+    }
+  }
+  @media (max-width: 400px) {
+    html {
+      font-size: 13px;
+    }
+  }
+}
+
+@layer components {
+  .status-badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .skeleton {
+    @apply animate-pulse rounded-md bg-slate-200 dark:bg-navy-800;
+  }
+}
+
+/* Printable views (Issue Slip, Return Slip, Stock/Purchase reports, Invoice)
+   — hide app chrome and let the content flow as a plain A4 document rather
+   than whatever fit the screen viewport. */
+@page {
+  size: A4;
+  margin: 10mm;
+}
+@media print {
+  aside,
+  header,
+  nav {
+    display: none !important;
+  }
+  main {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+  .shadow-card,
+  .shadow-card-hover {
+    box-shadow: none !important;
+  }
+  body {
+    margin: 0 !important;
+    background: #fff !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  /* Chrome/Firefox strip background colors by default when printing —
+     without this the status Badge and the invoice table header print as
+     plain text on white, losing all contrast. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+  /* Keep each item row, and the totals/signature block, from splitting
+     across a page boundary mid-row on a long invoice. */
+  .print-avoid-break {
+    break-inside: avoid;
+  }
+}
+.print-only {
+  display: none;
+}
+
+/* Data tables: keep every cell on one line and let the table grow past its
+   container's width instead of wrapping — every table in the app already
+   sits inside an `overflow-x-auto` wrapper, so this trades wrapped 3-line
+   cells for a horizontally scrollable table, which is far more readable on
+   narrow/mobile screens. Opt a specific cell back into wrapping with
+   `.cell-wrap` when long free-text (e.g. a validation error list) is more
+   usable wrapped than scrolled. */
+table :is(th, td) {
+  white-space: nowrap;
+}
+table :is(th, td).cell-wrap {
+  white-space: normal;
+  /* `white-space: normal` alone only wraps at existing spaces — a long
+     unbroken token (a 12+ digit barcode-style Part No, say) has nowhere to
+     break, so it overflows its fixed-width cell and visually runs into the
+     next column instead of wrapping. `anywhere` lets it break mid-string
+     when there's no better place to, which is exactly what the invoice
+     print/PDF's Part No / Description columns need. */
+  overflow-wrap: anywhere;
+}
+
+/* Slim scrollbars for dense data tables */
+.thin-scroll::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background-color: rgb(203 213 225);
+  border-radius: 9999px;
+}
+.dark .thin-scroll::-webkit-scrollbar-thumb {
+  background-color: rgb(38 50 82); /* navy-600 */
+}

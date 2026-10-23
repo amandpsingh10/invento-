@@ -1,0 +1,81 @@
+name: parts_inventory
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: parts_inventory
+      POSTGRES_PASSWORD: parts_inventory_dev_password
+      POSTGRES_DB: parts_inventory
+    ports:
+      - "5432:5432"
+    volumes:
+      - parts_inventory_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parts_inventory -d parts_inventory"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: build
+    command: sh -c "cd /app/database && npx prisma migrate deploy && npx tsx prisma/seed.ts"
+    environment:
+      DATABASE_URL: postgresql://parts_inventory:parts_inventory_dev_password@db:5432/parts_inventory?schema=public
+      # Local Postgres has no connection pooler, so the direct and pooled
+      # URLs Prisma's schema expects (see database/prisma/schema.prisma) are
+      # simply the same value here — the split only matters for a pooled
+      # provider like Neon (see .env.example).
+      DIRECT_URL: postgresql://parts_inventory:parts_inventory_dev_password@db:5432/parts_inventory?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://parts_inventory:parts_inventory_dev_password@db:5432/parts_inventory?schema=public
+      DIRECT_URL: postgresql://parts_inventory:parts_inventory_dev_password@db:5432/parts_inventory?schema=public
+      API_URL: http://localhost:4000
+      FRONTEND_URL: http://localhost:8080
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-access-secret-change-me-please-32chars}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret-change-me-please-32chars}
+      COOKIE_SECRET: ${COOKIE_SECRET:-dev-cookie-secret-change-me-please-32chars}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - parts_inventory_uploads:/app/backend/uploads
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        # Baked into the JS bundle and executed in the browser on the host
+        # machine, so it must be an address the browser can reach — the
+        # backend's host-mapped port (see the backend service's "4000:4000"
+        # port mapping below), not the "backend" Docker-network hostname.
+        VITE_API_URL: http://localhost:4000/api
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  parts_inventory_db_data:
+  parts_inventory_uploads:

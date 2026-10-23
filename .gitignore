@@ -1,0 +1,39 @@
+.env
+.env.local
+.env.*.local
+!.env.example
+
+node_modules/
+dist/
+build/
+coverage/
+
+*.log
+npm-debug.log*
+
+.DS_Store
+Thumbs.db
+
+# Prisma
+database/prisma/migrations/dev/
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Test artifacts
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# Uploaded files (local dev fallback storage)
+backend/uploads/
+
+# Capacitor native project build output (Gradle caches/wrapper/APKs) — not
+# part of the web deploy; leaving it untracked keeps `railway up` uploads
+# from sweeping in ~100MB of unrelated Android build artifacts.
+frontend/android/app/build/
+frontend/android/build/
+frontend/android/.gradle/
+*.apk

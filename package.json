@@ -1,0 +1,27 @@
+{
+  "name": "parts-inventory-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PARTS INVENTORY SYSTEM - Dealer Part Inventory Management SaaS",
+  "workspaces": [
+    "database",
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n DB,API,WEB -c green,blue,magenta \"npm run db:studio -w database\" \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "build": "npm run build -w database && npm run build -w backend && npm run build -w frontend",
+    "lint": "npm run lint -w backend && npm run lint -w frontend",
+    "test": "npm run test -w backend && npm run test -w frontend",
+    "db:generate": "npm run db:generate -w database",
+    "db:migrate": "npm run db:migrate -w database",
+    "db:deploy": "npm run db:deploy -w database",
+    "db:seed": "npm run db:seed -w database"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+**/dist
+**/build
+**/coverage
+.git
+.env
+**/.env
+*.log
+uploads
+backend/uploads
+docs
+PROJECT_PLAN.md
+README.md

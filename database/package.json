@@ -1,0 +1,32 @@
+{
+  "name": "@parts-inventory-system/database",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Prisma schema, migrations and seed data for PARTS INVENTORY SYSTEM",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "db:generate": "node scripts/with-root-env.cjs npx prisma generate",
+    "db:migrate": "node scripts/with-root-env.cjs npx prisma migrate dev",
+    "db:deploy": "node scripts/with-root-env.cjs npx prisma migrate deploy",
+    "db:seed": "node scripts/with-root-env.cjs npx tsx prisma/seed.ts",
+    "db:studio": "node scripts/with-root-env.cjs npx prisma studio",
+    "db:reset": "node scripts/with-root-env.cjs npx prisma migrate reset --force"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.20.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.20.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2",
+    "bcryptjs": "^2.4.3",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.16.10",
+    "dotenv": "^16.4.5"
+  }
+}

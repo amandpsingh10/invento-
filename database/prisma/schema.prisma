@@ -1,0 +1,853 @@
+// ==========================================================================
+// PARTS INVENTORY SYSTEM — Dealer Part Inventory Management SaaS
+// Prisma schema — PostgreSQL
+//
+// Multi-tenancy: every dealer-scoped table carries tenantId. tenantId is
+// NEVER derived from client input — the backend always injects it from the
+// authenticated session (see backend/src/middleware/tenant.middleware.ts).
+// ==========================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Stock mutations use SELECT ... FOR UPDATE inside interactive
+  // transactions (see backend/src/modules/inventory/inventory.mutations.ts).
+  // Prisma's own DDL commands (migrate) and this locking pattern both want a
+  // direct, non-pooled connection; DIRECT_URL lets a pooled DATABASE_URL
+  // (e.g. Neon's PgBouncer endpoint) be used for normal app traffic while
+  // migrations still run against the real connection.
+  directUrl = env("DIRECT_URL")
+}
+
+// --------------------------------------------------------------------------
+// Enums
+// --------------------------------------------------------------------------
+
+enum RoleName {
+  SUPER_ADMIN
+  TENANT_ADMIN
+  INVENTORY_MANAGER
+  STORE_USER
+  VIEWER
+}
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum PlanCode {
+  TRIAL
+  BASIC
+  PRO
+  ENTERPRISE
+}
+
+enum MasterStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum StockTxnType {
+  PURCHASE
+  ISSUE
+  SALE
+  RETURN
+  ADJUSTMENT
+  CORRECTION
+}
+
+enum InvoiceStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
+enum PurchaseStatus {
+  DRAFT
+  IMPORTED
+  FAILED
+}
+
+enum IssueStatus {
+  ISSUED
+  PARTIALLY_RETURNED
+  FULLY_RETURNED
+  CANCELLED
+}
+
+enum AdjustmentReasonType {
+  DAMAGE
+  THEFT
+  COUNT_CORRECTION
+  EXPIRY
+  OTHER
+}
+
+enum NotificationType {
+  PURCHASE_SUCCESS
+  PURCHASE_FAILED
+  LOW_STOCK
+  OUT_OF_STOCK
+  ISSUE_SUCCESS
+  RETURN_SUCCESS
+  ADJUSTMENT_SUCCESS
+  SALE_SUCCESS
+  INVOICE_CANCELLED
+  PART_ADDED
+  PASSWORD_RESET
+  USER_CREATED
+  SYSTEM
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+// --------------------------------------------------------------------------
+// Platform / SaaS level (SUPER_ADMIN scope)
+// --------------------------------------------------------------------------
+
+model Plan {
+  id                 String   @id @default(uuid())
+  code               PlanCode @unique
+  name               String
+  description        String?
+  priceMonthly       Decimal  @default(0) @db.Decimal(12, 2)
+  maxUsers           Int      @default(5)
+  maxStores          Int      @default(1)
+  maxParts           Int      @default(500)
+  maxMonthlyTxns     Int      @default(1000)
+  maxExcelUploadRows Int      @default(1000)
+  maxStorageMb       Int      @default(500)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Tenant {
+  id             String       @id @default(uuid())
+  dealerCode     String       @unique
+  name           String
+  contactPerson  String?
+  email          String?
+  phone          String?
+  address        String?
+  // Dealer's own GST home state + pincode — needed to determine whether a
+  // sale is intra-state (CGST+SGST) or inter-state (IGST) by comparing
+  // against the customer's state captured at sale time (see sales.service.ts).
+  state          String?
+  pincode        String?
+  gstin          String?
+  status         TenantStatus @default(TRIAL)
+  trialStartsAt  DateTime?
+  trialEndsAt    DateTime?
+  logoUrl        String?
+  // Below this available quantity a part shows as "Low Stock" on the
+  // mobile Low Stock card/screen. Kept separate from Part.minimumStockLevel
+  // (a richer, per-part threshold already used by Current Stock's
+  // IN_STOCK/LOW_STOCK/OUT_OF_STOCK badges) — this is the simple, single
+  // tenant-wide number the mobile dashboard's "Low Stock" definition uses.
+  lowStockThreshold Int        @default(10)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  users             User[]
+  stores            Store[]
+  bins              Bin[]
+  racks             Rack[]
+  parts             Part[]
+  inventory         Inventory[]
+  purchases         Purchase[]
+  issues            Issue[]
+  returns           Return[]
+  stockLedger       StockLedger[]
+  stockAdjustments  StockAdjustment[]
+  auditLogs         AuditLog[]
+  uploadedFiles     UploadedFile[]
+  notifications     Notification[]
+  subscriptions     Subscription[]
+  numberSequences   NumberSequence[]
+  customers         Customer[]
+  invoices          Invoice[]
+
+  @@map("tenants")
+}
+
+model Subscription {
+  id          String             @id @default(uuid())
+  tenantId    String
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planId      String
+  plan        Plan               @relation(fields: [planId], references: [id])
+  status      SubscriptionStatus @default(TRIALING)
+  startsAt    DateTime           @default(now())
+  endsAt      DateTime?
+  cancelledAt DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([tenantId])
+  @@map("subscriptions")
+}
+
+// --------------------------------------------------------------------------
+// RBAC
+// --------------------------------------------------------------------------
+
+model Role {
+  id          String   @id @default(uuid())
+  name        RoleName @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String @id @default(uuid())
+  code        String @unique // e.g. "parts:create", "issues:create"
+  description String?
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model User {
+  id                String    @id @default(uuid())
+  tenantId          String?
+  tenant            Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email             String
+  // Login identity: globally unique (not per-tenant) since the login screen
+  // no longer collects a dealer code — the mobile number alone resolves
+  // both the user and their tenant. email is kept for internal reference
+  // and notifications but is no longer a login credential.
+  mobile            String    @unique
+  passwordHash      String
+  firstName         String
+  lastName          String
+  isActive          Boolean   @default(true)
+  lastLoginAt       DateTime?
+  passwordResetToken       String?
+  passwordResetExpiresAt   DateTime?
+  refreshTokenHash  String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  userRoles         UserRole[]
+  auditLogs         AuditLog[]
+  uploadedFiles     UploadedFile[]
+  notifications     Notification[]
+  purchasesCreated  Purchase[]         @relation("PurchaseCreatedBy")
+  issuesCreated     Issue[]            @relation("IssueCreatedBy")
+  returnsCreated    Return[]           @relation("ReturnCreatedBy")
+  adjustmentsCreated StockAdjustment[] @relation("AdjustmentCreatedBy")
+  invoicesCreated   Invoice[]          @relation("InvoiceCreatedBy")
+  invoicesCancelled Invoice[]          @relation("InvoiceCancelledBy")
+  menuAccess        UserMenuAccess[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("users")
+}
+
+// Per-user overrides of which app menu items a dealer's staff can see, set
+// only by SUPER_ADMIN (see admin.routes.ts). A row's absence means "use the
+// normal role-based default" (existing behaviour, unchanged) — only an
+// explicit row forces a menu item on or off regardless of what the user's
+// role would otherwise grant. menuKey values are defined client-side in
+// frontend/src/components/layout/moreMenuItems.ts (the single source of
+// truth for the app's menu structure); the backend stores them opaquely.
+model UserMenuAccess {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  menuKey   String
+  allowed   Boolean
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, menuKey])
+  @@index([userId])
+  @@map("user_menu_access")
+}
+
+model UserRole {
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+// --------------------------------------------------------------------------
+// Location masters: Store -> Bin / Rack
+// --------------------------------------------------------------------------
+
+model Store {
+  id        String       @id @default(uuid())
+  tenantId  String
+  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code      String
+  name      String
+  address   String?
+  status    MasterStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  bins      Bin[]
+  racks     Rack[]
+  inventory Inventory[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("stores")
+}
+
+model Bin {
+  id        String       @id @default(uuid())
+  tenantId  String
+  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId   String
+  store     Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  code      String
+  status    MasterStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  inventory Inventory[]
+
+  @@unique([tenantId, storeId, code])
+  @@index([tenantId])
+  @@map("bins")
+}
+
+model Rack {
+  id        String       @id @default(uuid())
+  tenantId  String
+  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId   String
+  store     Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  code      String
+  status    MasterStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  inventory Inventory[]
+
+  @@unique([tenantId, storeId, code])
+  @@index([tenantId])
+  @@map("racks")
+}
+
+// --------------------------------------------------------------------------
+// Part master
+// --------------------------------------------------------------------------
+
+model Part {
+  id                String       @id @default(uuid())
+  tenantId          String
+  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  partNo            String
+  description       String
+  taxPercent         Decimal      @default(0) @db.Decimal(5, 2)
+  hsnCode           String?
+  // Pricing chain (entered via the Part master / Add Inventory forms):
+  //   NDP (entered) → List Price = NDP + dealerMarginPercent →
+  //   MRP = List Price + taxPercent. mrp is always computed server-side from
+  //   the other three (see backend/src/utils/pricing.ts) — never trusted from
+  //   the client. Excel imports are still MRP-first (NDP back-derived at 0%
+  //   margin), so they reset dealerMarginPercent to 0 to keep the chain true.
+  mrp               Decimal      @default(0) @db.Decimal(12, 2)
+  ndp               Decimal      @default(0) @db.Decimal(12, 2)
+  dealerMarginPercent Decimal    @default(0) @db.Decimal(5, 2)
+  // NOS (numbers — whole units only) | LTR | ML | KGS. LTR, ML and KGS
+  // allow fractional quantities (e.g. 1.5 LTR of oil); NOS stays
+  // whole-unit-only — enforced server-side in quantity.ts, never assumed
+  // from client input.
+  unit              String       @default("NOS")
+  minimumStockLevel Int          @default(0)
+  // Not read by any scanning hardware yet — this just reserves the data
+  // model slot so a future barcode-scan UI has somewhere to write/match
+  // against without another migration.
+  barcode           String?
+  // O (Oil & Lubricants) | C (Consumables) | A (Accessories) | P (Parts) —
+  // the dealer's own store-category grouping, independent of which
+  // physical Store/Bin/Rack a given unit of stock sits in. See
+  // utils/partCategory.ts for the canonical list and labels.
+  category          String       @default("P")
+  status            MasterStatus @default(ACTIVE)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  inventory     Inventory[]
+  purchaseItems PurchaseItem[]
+  issueItems    IssueItem[]
+  returnItems   ReturnItem[]
+  stockLedger   StockLedger[]
+  adjustments   StockAdjustment[]
+  invoiceItems  InvoiceItem[]
+
+  @@index([tenantId, barcode])
+
+  @@unique([tenantId, partNo])
+  @@index([tenantId])
+  @@map("parts")
+}
+
+// --------------------------------------------------------------------------
+// Inventory (current stock per Part+Store+Bin+Rack)
+// --------------------------------------------------------------------------
+
+model Inventory {
+  id            String   @id @default(uuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  partId        String
+  part          Part     @relation(fields: [partId], references: [id], onDelete: Cascade)
+  storeId       String
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  binId         String
+  bin           Bin      @relation(fields: [binId], references: [id], onDelete: Cascade)
+  rackId        String
+  rack          Rack     @relation(fields: [rackId], references: [id], onDelete: Cascade)
+  quantity      Decimal  @default(0) @db.Decimal(12, 3)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  purchaseItems PurchaseItem[]
+  issueItems    IssueItem[]
+  invoiceItems  InvoiceItem[]
+  returnItems   ReturnItem[]
+  stockLedger   StockLedger[]
+  adjustments   StockAdjustment[]
+
+  @@unique([tenantId, partId, storeId, binId, rackId])
+  @@index([tenantId])
+  @@index([tenantId, partId])
+  @@map("inventory")
+}
+
+// --------------------------------------------------------------------------
+// Purchases (Excel import)
+// --------------------------------------------------------------------------
+
+model Purchase {
+  id              String         @id @default(uuid())
+  tenantId        String
+  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  purchaseNumber  String
+  invoiceNumber   String
+  purchaseDate    DateTime       @default(now())
+  status          PurchaseStatus @default(IMPORTED)
+  uploadedFileId  String?
+  uploadedFile    UploadedFile?  @relation(fields: [uploadedFileId], references: [id])
+  createdById     String
+  createdBy       User           @relation("PurchaseCreatedBy", fields: [createdById], references: [id])
+  createdAt       DateTime       @default(now())
+
+  items       PurchaseItem[]
+  stockLedger StockLedger[]
+
+  @@unique([tenantId, purchaseNumber])
+  @@index([tenantId])
+  @@index([tenantId, invoiceNumber])
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id          String    @id @default(uuid())
+  purchaseId  String
+  purchase    Purchase  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  partId      String
+  part        Part      @relation(fields: [partId], references: [id])
+  inventoryId String
+  inventory   Inventory @relation(fields: [inventoryId], references: [id])
+  quantity    Decimal   @db.Decimal(12, 3)
+  mrp         Decimal   @db.Decimal(12, 2)
+  ndp         Decimal   @db.Decimal(12, 2)
+  taxPercent  Decimal   @db.Decimal(5, 2)
+
+  @@index([purchaseId])
+  @@map("purchase_items")
+}
+
+// --------------------------------------------------------------------------
+// Issue
+// --------------------------------------------------------------------------
+
+model Issue {
+  id          String      @id @default(uuid())
+  tenantId    String
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  issueNumber String
+  issueDate   DateTime    @default(now())
+  reference   String? // customer / vehicle / job card reference
+  status      IssueStatus @default(ISSUED)
+  remarks     String?
+  createdById String
+  createdBy   User        @relation("IssueCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime    @default(now())
+
+  items       IssueItem[]
+  returns     Return[]
+  stockLedger StockLedger[]
+
+  @@unique([tenantId, issueNumber])
+  @@index([tenantId])
+  @@map("issues")
+}
+
+model IssueItem {
+  id             String    @id @default(uuid())
+  issueId        String
+  issue          Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  partId         String
+  part           Part      @relation(fields: [partId], references: [id])
+  inventoryId    String
+  inventory      Inventory @relation(fields: [inventoryId], references: [id])
+  quantity       Decimal   @db.Decimal(12, 3)
+  returnedQty    Decimal   @default(0) @db.Decimal(12, 3)
+  mrp            Decimal   @db.Decimal(12, 2)
+  ndp            Decimal   @db.Decimal(12, 2)
+  taxPercent     Decimal   @db.Decimal(5, 2)
+
+  returnItems ReturnItem[]
+
+  @@index([issueId])
+  @@map("issue_items")
+}
+
+// --------------------------------------------------------------------------
+// Return
+// --------------------------------------------------------------------------
+
+model Return {
+  id           String   @id @default(uuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  returnNumber String
+  returnDate   DateTime @default(now())
+  // A return traces back to exactly one of these two sources:
+  //  - issueId: the original "Part Issue" flow (job-card reference, no
+  //    invoice) — returnable directly, no cancellation required.
+  //  - invoiceId: a customer sale. Requires the invoice to already be
+  //    CANCELLED before a return against it is allowed (see invoices
+  //    service) — cancellation and physical stock return stay separately
+  //    traceable rather than cancellation silently restoring stock itself.
+  issueId      String?
+  issue        Issue?   @relation(fields: [issueId], references: [id])
+  invoiceId    String?
+  invoice      Invoice? @relation(fields: [invoiceId], references: [id])
+  remarks      String?
+  createdById  String
+  createdBy    User     @relation("ReturnCreatedBy", fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+
+  items       ReturnItem[]
+  stockLedger StockLedger[]
+
+  @@unique([tenantId, returnNumber])
+  @@index([tenantId])
+  @@index([issueId])
+  @@index([invoiceId])
+  @@map("returns")
+}
+
+model ReturnItem {
+  id           String      @id @default(uuid())
+  returnId     String
+  return       Return      @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  // Exactly one of these two is set, matching the parent Return's source.
+  issueItemId  String?
+  issueItem    IssueItem?  @relation(fields: [issueItemId], references: [id])
+  invoiceItemId String?
+  invoiceItem  InvoiceItem? @relation(fields: [invoiceItemId], references: [id])
+  partId      String
+  part        Part      @relation(fields: [partId], references: [id])
+  inventoryId String
+  inventory   Inventory @relation(fields: [inventoryId], references: [id])
+  quantity    Decimal   @db.Decimal(12, 3)
+
+  @@index([returnId])
+  @@index([invoiceItemId])
+  @@map("return_items")
+}
+
+// --------------------------------------------------------------------------
+// Stock Ledger (immutable source of truth for stock movement)
+// --------------------------------------------------------------------------
+
+model StockLedger {
+  id                String       @id @default(uuid())
+  tenantId          String
+  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactionNumber String
+  transactionType   StockTxnType
+  partId            String
+  part              Part         @relation(fields: [partId], references: [id])
+  inventoryId       String
+  inventory         Inventory    @relation(fields: [inventoryId], references: [id])
+  invoiceNumber     String?
+  quantityChange    Decimal      @db.Decimal(12, 3)
+  balanceQuantity   Decimal      @db.Decimal(12, 3)
+  reference         String?
+  purchaseId        String?
+  purchase          Purchase?    @relation(fields: [purchaseId], references: [id])
+  issueId           String?
+  issue             Issue?       @relation(fields: [issueId], references: [id])
+  returnId          String?
+  return            Return?      @relation(fields: [returnId], references: [id])
+  adjustmentId      String?
+  adjustment        StockAdjustment? @relation(fields: [adjustmentId], references: [id])
+  saleInvoiceId     String?
+  saleInvoice       Invoice?     @relation(fields: [saleInvoiceId], references: [id])
+  createdById       String
+  createdByName     String
+  createdAt         DateTime     @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, partId])
+  @@index([tenantId, transactionNumber])
+  @@index([tenantId, createdAt])
+  @@map("stock_ledger")
+}
+
+// --------------------------------------------------------------------------
+// Stock Adjustment
+// --------------------------------------------------------------------------
+
+model StockAdjustment {
+  id                 String               @id @default(uuid())
+  tenantId           String
+  tenant             Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  adjustmentNumber   String
+  partId             String
+  part               Part                 @relation(fields: [partId], references: [id])
+  inventoryId        String
+  inventory          Inventory            @relation(fields: [inventoryId], references: [id])
+  systemQuantity     Decimal              @db.Decimal(12, 3)
+  physicalQuantity   Decimal              @db.Decimal(12, 3)
+  difference         Decimal              @db.Decimal(12, 3)
+  reasonType         AdjustmentReasonType
+  remarks            String?
+  createdById        String
+  createdBy          User                 @relation("AdjustmentCreatedBy", fields: [createdById], references: [id])
+  createdAt          DateTime             @default(now())
+
+  stockLedger StockLedger[]
+
+  @@unique([tenantId, adjustmentNumber])
+  @@index([tenantId])
+  @@map("stock_adjustments")
+}
+
+// --------------------------------------------------------------------------
+// Audit log (immutable)
+// --------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  tenantId   String?
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  userEmail  String?
+  role       String?
+  action     String
+  entityType String
+  entityId   String?
+  oldValue   Json?
+  newValue   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, entityType])
+  @@index([tenantId, createdAt])
+  @@map("audit_logs")
+}
+
+// --------------------------------------------------------------------------
+// Uploaded files (Excel imports, generated reports)
+// --------------------------------------------------------------------------
+
+model UploadedFile {
+  id            String   @id @default(uuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  originalName  String
+  storageKey    String
+  mimeType      String
+  sizeBytes     Int
+  purpose       String // PURCHASE_IMPORT | ERROR_REPORT | GENERATED_REPORT
+  uploadedById  String
+  uploadedBy    User     @relation(fields: [uploadedById], references: [id])
+  createdAt     DateTime @default(now())
+
+  purchases Purchase[]
+
+  @@index([tenantId])
+  @@map("uploaded_files")
+}
+
+// --------------------------------------------------------------------------
+// Notifications
+// --------------------------------------------------------------------------
+
+model Notification {
+  id        String           @id @default(uuid())
+  tenantId  String
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?            @relation(fields: [userId], references: [id])
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([tenantId, userId])
+  @@index([tenantId, isRead])
+  @@map("notifications")
+}
+
+// --------------------------------------------------------------------------
+// Number sequences (per-tenant, per-prefix atomic counters for
+// PUR-2026-000001 / ISS-2026-000001 / RET-2026-000001 / ADJ-2026-000001)
+// --------------------------------------------------------------------------
+
+model NumberSequence {
+  id           String @id @default(uuid())
+  tenantId     String
+  tenant       Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sequenceKey  String // e.g. "PUR-2026", "ISS-2026", "RET-2026", "ADJ-2026", "INV-2026"
+  lastValue    Int    @default(0)
+
+  @@unique([tenantId, sequenceKey])
+  @@map("number_sequences")
+}
+
+// --------------------------------------------------------------------------
+// Customer sales: Customer, Invoice, InvoiceItem
+// --------------------------------------------------------------------------
+
+model Customer {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  mobile    String
+  address   String?
+  // Captured at sale time (state auto-filled from pincode via the public
+  // pincode-lookup proxy, editable) — state drives the CGST+SGST vs IGST
+  // split on every invoice created for this customer.
+  pincode   String?
+  state     String?
+  city      String?
+  gstin     String?
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoices Invoice[]
+
+  // A customer is looked up/reused by mobile number within a tenant on
+  // every new sale (see sales service) — never created twice for the same
+  // mobile within one dealer.
+  @@unique([tenantId, mobile])
+  @@index([tenantId])
+  @@map("customers")
+}
+
+model Invoice {
+  id                 String        @id @default(uuid())
+  tenantId           String
+  tenant             Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoiceNumber      String
+  invoiceDate        DateTime      @default(now())
+  customerId         String
+  customer           Customer      @relation(fields: [customerId], references: [id])
+  status             InvoiceStatus @default(COMPLETED)
+  subtotal           Decimal       @db.Decimal(12, 2)
+  taxAmount          Decimal       @db.Decimal(12, 2)
+  grandTotal         Decimal       @db.Decimal(12, 2)
+  createdById        String
+  createdBy          User          @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
+  createdAt          DateTime      @default(now())
+  cancelledById       String?
+  cancelledBy         User?        @relation("InvoiceCancelledBy", fields: [cancelledById], references: [id])
+  cancelledAt         DateTime?
+  cancellationReason  String?
+
+  items       InvoiceItem[]
+  stockLedger StockLedger[]
+  returns     Return[]
+
+  @@unique([tenantId, invoiceNumber])
+  @@index([tenantId])
+  @@index([tenantId, customerId])
+  @@index([tenantId, status])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id           String    @id @default(uuid())
+  invoiceId    String
+  invoice      Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  partId       String
+  part         Part      @relation(fields: [partId], references: [id])
+  inventoryId  String
+  inventory    Inventory @relation(fields: [inventoryId], references: [id])
+  quantity     Decimal   @db.Decimal(12, 3)
+  returnedQty  Decimal   @default(0) @db.Decimal(12, 3)
+  sellingPrice Decimal   @db.Decimal(12, 2)
+  taxPercent   Decimal   @db.Decimal(5, 2)
+  // taxAmount stays the single source of truth for "total tax on this
+  // line" (= cgstAmount+sgstAmount, or = igstAmount) — every existing
+  // consumer (ledger totals, reports) keeps working unchanged. The three
+  // fields below are the GST breakdown for invoice display/print only,
+  // fixed at sale time so a later customer-address edit never rewrites
+  // an already-issued invoice's tax treatment.
+  taxAmount    Decimal   @db.Decimal(12, 2)
+  taxType      String    @default("CGST_SGST") // "CGST_SGST" (intra-state) | "IGST" (inter-state)
+  cgstAmount   Decimal   @default(0) @db.Decimal(12, 2)
+  sgstAmount   Decimal   @default(0) @db.Decimal(12, 2)
+  igstAmount   Decimal   @default(0) @db.Decimal(12, 2)
+  lineTotal    Decimal   @db.Decimal(12, 2)
+
+  returnItems ReturnItem[]
+
+  @@index([invoiceId])
+  @@map("invoice_items")
+}
