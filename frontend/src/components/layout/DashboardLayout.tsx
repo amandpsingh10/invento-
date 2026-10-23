@@ -2,6 +2,7 @@ import { Outlet } from "react-router-dom";
 import { Topbar } from "./Topbar";
 import { BottomNav } from "./BottomNav";
 import { Sidebar } from "./Sidebar";
+import { TrialExpiredModal } from "@/features/tenant/TrialExpiredModal";
 
 /**
  * Navigation is: a collapsible icon Sidebar on desktop (lg and up), and
@@ -27,6 +28,7 @@ export function DashboardLayout() {
         </main>
         <BottomNav />
       </div>
+      <TrialExpiredModal />
     </div>
   );
 }

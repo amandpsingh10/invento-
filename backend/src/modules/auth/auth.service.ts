@@ -103,7 +103,15 @@ export async function login(input: { mobile: string; password: string }, req?: R
       menuAccess,
     },
     tenant: user.tenant
-      ? { id: user.tenant.id, name: user.tenant.name, dealerCode: user.tenant.dealerCode, address: user.tenant.address, state: user.tenant.state }
+      ? {
+          id: user.tenant.id,
+          name: user.tenant.name,
+          dealerCode: user.tenant.dealerCode,
+          address: user.tenant.address,
+          state: user.tenant.state,
+          status: user.tenant.status,
+          trialEndsAt: user.tenant.trialEndsAt,
+        }
       : null,
   };
 }
@@ -167,6 +175,7 @@ export async function getCurrentUser(userId: string) {
           address: user.tenant.address,
           state: user.tenant.state,
           status: user.tenant.status,
+          trialEndsAt: user.tenant.trialEndsAt,
         }
       : null,
   };

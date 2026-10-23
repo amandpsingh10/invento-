@@ -10,6 +10,8 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   login: (input: { mobile: string; password: string; rememberMe?: boolean }) => Promise<CurrentUser>;
   logout: () => Promise<void>;
+  /** Re-fetches /auth/me — used after an action that changes the tenant (e.g. selecting a plan) so the UI updates without a full re-login. */
+  refreshTenant: () => Promise<void>;
   hasRole: (...roles: CurrentUser["roles"]) => boolean;
   /** Combines a menu item's role default with any Super-Admin per-user override. */
   canAccessMenu: MenuAccessCheck;
@@ -61,6 +63,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function refreshTenant() {
+    try {
+      const me = await apiClient.get("/auth/me");
+      setUser(me.data.data);
+      setTenant(me.data.data.tenant);
+    } catch {
+      // Leave current state as-is — this is a best-effort refresh, not a session check.
+    }
+  }
+
   async function logout() {
     try {
       await apiClient.post("/auth/logout");
@@ -80,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canAccessMenu: MenuAccessCheck = user ? makeMenuAccessCheck(user.menuAccess ?? {}, hasRole) : () => false;
 
   return (
-    <AuthContext.Provider value={{ user, tenant, isLoading, isAuthenticated: !!user, login, logout, hasRole, canAccessMenu }}>
+    <AuthContext.Provider value={{ user, tenant, isLoading, isAuthenticated: !!user, login, logout, refreshTenant, hasRole, canAccessMenu }}>
       {children}
     </AuthContext.Provider>
   );

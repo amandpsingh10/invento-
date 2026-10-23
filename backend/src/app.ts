@@ -28,6 +28,7 @@ import auditRoutes from "./modules/audit/audit.routes";
 import usersRoutes from "./modules/users/users.routes";
 import notificationsRoutes from "./modules/notifications/notifications.routes";
 import adminRoutes from "./modules/admin/admin.routes";
+import tenantRoutes from "./modules/tenant/tenant.routes";
 import salesRoutes from "./modules/sales/sales.routes";
 import { buildOpenApiDocument } from "./docs/openapi";
 
@@ -100,6 +101,7 @@ export function createApp() {
   app.use("/api/users", usersRoutes);
   app.use("/api/notifications", notificationsRoutes);
   app.use("/api/admin", adminRoutes);
+  app.use("/api/tenant", tenantRoutes);
   // Same router mounted twice: /api/invoices is the canonical resource
   // name (matches the Invoice model), /api/sales is kept as an alias since
   // the spec lists both — no business logic is duplicated between them.

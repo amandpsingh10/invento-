@@ -61,7 +61,7 @@ export async function createTenant(input: z.infer<typeof createTenantSchema>) {
         address: input.address,
         status: input.planCode === "TRIAL" ? "TRIAL" : "ACTIVE",
         trialStartsAt: new Date(),
-        trialEndsAt: input.planCode === "TRIAL" ? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) : null,
+        trialEndsAt: input.planCode === "TRIAL" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : null,
       },
     });
 

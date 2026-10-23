@@ -22,6 +22,7 @@ export interface TenantSummary {
   address?: string | null;
   state?: string | null;
   status?: string;
+  trialEndsAt?: string | null;
 }
 
 export interface PagedResult<T> {
