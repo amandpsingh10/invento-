@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Users, Store, Boxes, Receipt, Sheet, HardDrive } from "lucide-react";
+import { Pencil, Users, Store, Boxes, Receipt, Sheet, HardDrive, ListChecks } from "lucide-react";
 import { apiClient, getApiErrorMessage } from "@/lib/apiClient";
 import type { Plan } from "@/types";
 import { PageHeader } from "@/components/ui/Feedback";
@@ -12,6 +12,9 @@ import { Badge } from "@/components/ui/Badge";
 import { IconFieldRow } from "@/components/ui/IconFieldRow";
 import { useToast } from "@/components/ui/Toast";
 import { formatCurrency } from "@/lib/utils";
+import { PRIMARY_TABS, MORE_MENU_GROUPS } from "@/components/layout/moreMenuItems";
+
+const ALL_MENU_KEYS = [...PRIMARY_TABS.map((t) => t.key), ...MORE_MENU_GROUPS.flatMap((g) => g.items.map((i) => i.key))];
 
 const emptyEditForm = {
   name: "",
@@ -24,6 +27,7 @@ const emptyEditForm = {
   maxExcelUploadRows: "1",
   maxStorageMb: "1",
   isActive: true,
+  allowedMenuKeys: {} as Record<string, boolean>,
 };
 
 export function PlansPage() {
@@ -51,6 +55,7 @@ export function PlansPage() {
         maxExcelUploadRows: Number(form.maxExcelUploadRows),
         maxStorageMb: Number(form.maxStorageMb),
         isActive: form.isActive,
+        allowedMenuKeys: ALL_MENU_KEYS.filter((k) => form.allowedMenuKeys[k]),
       };
       return apiClient.put(`/admin/plans/${editing!.id}`, payload);
     },
@@ -75,6 +80,7 @@ export function PlansPage() {
       maxExcelUploadRows: String(plan.maxExcelUploadRows),
       maxStorageMb: String(plan.maxStorageMb),
       isActive: plan.isActive,
+      allowedMenuKeys: Object.fromEntries(ALL_MENU_KEYS.map((k) => [k, plan.allowedMenuKeys.includes(k)])),
     });
     setError(null);
   }
@@ -128,6 +134,11 @@ export function PlansPage() {
                     <IconFieldRow icon={Receipt} label="Txns / month" value={plan.maxMonthlyTxns.toLocaleString("en-IN")} />
                     <IconFieldRow icon={Sheet} label="Excel rows" value={plan.maxExcelUploadRows.toLocaleString("en-IN")} />
                     <IconFieldRow icon={HardDrive} label="Storage" value={`${(plan.maxStorageMb / 1024).toFixed(1)} GB`} />
+                    <IconFieldRow
+                      icon={ListChecks}
+                      label="Menus enabled"
+                      value={`${plan.allowedMenuKeys.length} / ${ALL_MENU_KEYS.length}`}
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -174,7 +185,7 @@ export function PlansPage() {
           </>
         }
       >
-        <div className="space-y-4">
+        <div className="max-h-[70vh] space-y-4 overflow-y-auto thin-scroll pr-1">
           {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">{error}</div>}
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -227,6 +238,50 @@ export function PlansPage() {
             />
             Active (selectable when onboarding a new dealer)
           </label>
+
+          <div className="border-t border-slate-100 pt-4 dark:border-navy-800">
+            <p className="mb-1 text-sm font-semibold text-slate-800 dark:text-slate-200">Features &amp; Menus Allowed</p>
+            <p className="mb-3 text-xs text-slate-400 dark:text-slate-500">
+              A menu unchecked here is hidden for every user of a dealer on this plan — even one a role or an explicit per-user grant would normally show.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Primary Tabs</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {PRIMARY_TABS.map((tab) => (
+                    <label key={tab.key} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 dark:border-navy-700 dark:text-slate-300">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-navy-600"
+                        checked={form.allowedMenuKeys[tab.key] ?? false}
+                        onChange={(e) => setForm({ ...form, allowedMenuKeys: { ...form.allowedMenuKeys, [tab.key]: e.target.checked } })}
+                      />
+                      <span className="truncate">{tab.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {MORE_MENU_GROUPS.map((group) => (
+                <div key={group.label}>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{group.label}</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {group.items.map((item) => (
+                      <label key={item.key} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 dark:border-navy-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-navy-600"
+                          checked={form.allowedMenuKeys[item.key] ?? false}
+                          onChange={(e) => setForm({ ...form, allowedMenuKeys: { ...form.allowedMenuKeys, [item.key]: e.target.checked } })}
+                        />
+                        <span className="truncate">{item.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </Dialog>
     </div>

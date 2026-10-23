@@ -130,6 +130,12 @@ model Plan {
   maxMonthlyTxns     Int      @default(1000)
   maxExcelUploadRows Int      @default(1000)
   maxStorageMb       Int      @default(500)
+  // Menu keys (see backend/src/modules/admin/menuKeys.ts) a dealer on this
+  // plan may access at all — a hard cap enforced on top of each user's own
+  // role/menu-access overrides (see UserMenuAccess): a menu absent here is
+  // hidden for every user of a tenant on this plan, regardless of role or
+  // any explicit per-user grant.
+  allowedMenuKeys    String[] @default([])
   isActive           Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt

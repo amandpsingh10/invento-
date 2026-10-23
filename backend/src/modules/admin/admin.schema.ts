@@ -37,6 +37,7 @@ export const updatePlanSchema = z.object({
   maxMonthlyTxns: z.coerce.number().int().min(1, "Must allow at least 1 transaction").optional(),
   maxExcelUploadRows: z.coerce.number().int().min(1).optional(),
   maxStorageMb: z.coerce.number().int().min(1).optional(),
+  allowedMenuKeys: z.array(z.string().refine((k) => MENU_KEY_SET.has(k), "Unknown menu key")).optional(),
   isActive: z.boolean().optional(),
 });
 

@@ -451,6 +451,7 @@ export interface Plan {
   maxMonthlyTxns: number;
   maxExcelUploadRows: number;
   maxStorageMb: number;
+  allowedMenuKeys: string[];
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

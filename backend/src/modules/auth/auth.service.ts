@@ -6,6 +6,7 @@ import { ApiError } from "../../lib/apiError";
 import { recordAudit } from "../audit/audit.service";
 import type { Request } from "express";
 import type { RoleName } from "@parts-inventory-system/database";
+import { MENU_KEYS } from "../admin/menuKeys";
 
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -17,17 +18,36 @@ async function loadUserRoles(userId: string): Promise<RoleName[]> {
 }
 
 /**
- * Per-user menu overrides set by SUPER_ADMIN (see admin.routes.ts). Only
- * explicit overrides are returned — an item's absence means the frontend
- * should fall back to its normal role-based default, so this stays empty
- * (and behaviour unchanged) for every user nobody has restricted.
+ * Per-user menu overrides set by SUPER_ADMIN (see admin.routes.ts), capped
+ * by the dealer's current plan — a menu the plan doesn't include is forced
+ * off for every user of that tenant, even one an admin explicitly granted
+ * (the plan is a hard cap, not just another default). Platform users
+ * (tenantId null) have no plan and aren't capped. An item's absence in the
+ * returned map (no override, and the plan allows it) means the frontend
+ * falls back to its normal role-based default — unchanged for every tenant
+ * whose plan hasn't been narrowed from "every menu" (the seeded default).
  */
-async function loadMenuAccess(userId: string): Promise<Record<string, boolean>> {
+async function loadMenuAccess(userId: string, tenantId: string | null): Promise<Record<string, boolean>> {
   const rows = await prisma.userMenuAccess.findMany({ where: { userId } });
-  return rows.reduce<Record<string, boolean>>((acc, r) => {
+  const menuAccess = rows.reduce<Record<string, boolean>>((acc, r) => {
     acc[r.menuKey] = r.allowed;
     return acc;
   }, {});
+
+  if (!tenantId) return menuAccess;
+
+  const subscription = await prisma.subscription.findFirst({
+    where: { tenantId },
+    orderBy: { createdAt: "desc" },
+    include: { plan: true },
+  });
+  if (!subscription) return menuAccess;
+
+  const allowedByPlan = new Set(subscription.plan.allowedMenuKeys);
+  for (const key of MENU_KEYS) {
+    if (!allowedByPlan.has(key)) menuAccess[key] = false;
+  }
+  return menuAccess;
 }
 
 export async function login(input: { mobile: string; password: string }, req?: Request) {
@@ -50,7 +70,7 @@ export async function login(input: { mobile: string; password: string }, req?: R
   }
 
   const roles = await loadUserRoles(user.id);
-  const menuAccess = await loadMenuAccess(user.id);
+  const menuAccess = await loadMenuAccess(user.id, user.tenantId);
 
   const accessToken = signAccessToken({ sub: user.id, tenantId: user.tenantId, roles });
   const refreshToken = signRefreshToken({ sub: user.id, tenantId: user.tenantId });
@@ -130,7 +150,7 @@ export async function getCurrentUser(userId: string) {
   });
   if (!user) throw ApiError.unauthorized();
   const roles = await loadUserRoles(user.id);
-  const menuAccess = await loadMenuAccess(user.id);
+  const menuAccess = await loadMenuAccess(user.id, user.tenantId);
   return {
     id: user.id,
     email: user.email,
