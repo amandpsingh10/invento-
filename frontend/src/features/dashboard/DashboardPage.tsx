@@ -83,14 +83,14 @@ function StatCard({
   return (
     <Link
       to={to}
-      className="flex min-h-[7.5rem] flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-card transition-shadow active:scale-[0.99] hover:shadow-card-hover sm:p-5 dark:border-navy-700 dark:bg-navy-900"
+      className="group flex min-h-[7.5rem] flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card transition-all active:scale-[0.99] hover:-translate-y-0.5 hover:shadow-card-hover sm:p-5 dark:border-navy-700 dark:bg-navy-900"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-200">{title}</p>
-          <p className="font-display mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{value}</p>
+          <p className="font-display mt-1 text-2xl font-bold tracking-tight tabular-nums text-slate-900 dark:text-slate-100">{value}</p>
         </div>
-        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${iconTone}`}>
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105 ${iconTone}`}>
           <Icon className="h-5 w-5" />
         </div>
       </div>
@@ -158,12 +158,14 @@ export function DashboardPage() {
       </div>
 
       {/* Welcome banner */}
-      <div className="relative mb-4 overflow-hidden rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50 to-blue-100/70 p-5 sm:p-6 dark:border-brand-500/30 dark:from-brand-500/15 dark:to-blue-500/10">
-        <Boxes className="pointer-events-none absolute -right-4 -top-4 h-32 w-32 text-brand-600/10 sm:h-40 sm:w-40 dark:text-brand-400/10" />
-        <p className="font-display relative text-lg font-bold text-slate-900 sm:text-xl dark:text-slate-100">
+      <div className="relative mb-4 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-600 via-brand-700 to-indigo-900 p-5 shadow-glow sm:p-6">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-12 left-1/3 h-32 w-32 rounded-full bg-brand-400/20 blur-3xl" />
+        <Boxes className="pointer-events-none absolute -right-3 -top-3 h-28 w-28 text-white/10 sm:h-36 sm:w-36" />
+        <p className="font-display relative text-lg font-bold text-white sm:text-xl">
           {greeting()}, {user?.firstName ?? "there"}
         </p>
-        <p className="relative mt-1 text-sm text-slate-600 dark:text-slate-300">Manage your inventory with ease</p>
+        <p className="relative mt-1 text-sm text-white/75">Manage your inventory with ease</p>
       </div>
 
       {/* Stat / secondary-action cards */}
@@ -221,35 +223,28 @@ export function DashboardPage() {
             </Link>
           </div>
           {recentSales && recentSales.items.length > 0 ? (
-            <div className="overflow-x-auto thin-scroll">
-              <table className="w-full text-left text-xs">
-                <thead className="text-slate-400 dark:text-slate-500">
-                  <tr>
-                    <th className="px-4 py-2 font-medium">Invoice No</th>
-                    <th className="px-4 py-2 font-medium">Date</th>
-                    <th className="px-4 py-2 font-medium">Customer</th>
-                    <th className="px-4 py-2 text-right font-medium">Amount</th>
-                    <th className="px-4 py-2 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-navy-800">
-                  {recentSales.items.map((inv) => (
-                    <tr key={inv.id}>
-                      <td className="px-4 py-2.5">
-                        <Link to={`/invoices/${inv.id}`} className="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400">
-                          {inv.invoiceNumber}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{formatDate(inv.invoiceDate)}</td>
-                      <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{inv.customer.name}</td>
-                      <td className="px-4 py-2.5 text-right font-medium text-slate-800 dark:text-slate-200">{formatCurrency(inv.grandTotal)}</td>
-                      <td className="px-4 py-2.5">
-                        <Badge tone={INVOICE_STATUS_TONE[inv.status] ?? "neutral"}>{inv.status}</Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="divide-y divide-slate-100 dark:divide-navy-800">
+              {recentSales.items.map((inv) => (
+                <Link
+                  key={inv.id}
+                  to={`/invoices/${inv.id}`}
+                  className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50 dark:hover:bg-navy-800/60"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                    <Receipt className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-200">{inv.invoiceNumber}</p>
+                    <p className="truncate text-xs text-slate-400 dark:text-slate-500">
+                      {inv.customer.name} · {formatDate(inv.invoiceDate)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <p className="font-display text-sm font-bold tabular-nums text-slate-900 dark:text-slate-100">{formatCurrency(inv.grandTotal)}</p>
+                    <Badge tone={INVOICE_STATUS_TONE[inv.status] ?? "neutral"}>{inv.status}</Badge>
+                  </div>
+                </Link>
+              ))}
             </div>
           ) : (
             <EmptyState title="No sales yet" description="Completed sales will show up here." />
@@ -267,29 +262,33 @@ export function DashboardPage() {
             </Link>
           </div>
           {lowStock && lowStock.items.length > 0 ? (
-            <div className="overflow-x-auto thin-scroll">
-              <table className="w-full text-left text-xs">
-                <thead className="text-slate-400 dark:text-slate-500">
-                  <tr>
-                    <th className="px-4 py-2 font-medium">Part No</th>
-                    <th className="px-4 py-2 font-medium">Description</th>
-                    <th className="px-4 py-2 text-right font-medium">Current Qty</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-navy-800">
-                  {lowStock.items.map((row) => (
-                    <tr key={row.id}>
-                      <td className="px-4 py-2.5 font-medium text-slate-800 dark:text-slate-200">{row.partNo}</td>
-                      <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{row.description}</td>
-                      <td
-                        className={`px-4 py-2.5 text-right font-semibold ${row.status === "OUT_OF_STOCK" ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}
-                      >
+            <div className="divide-y divide-slate-100 dark:divide-navy-800">
+              {lowStock.items.map((row) => {
+                const critical = row.status === "OUT_OF_STOCK";
+                return (
+                  <div key={row.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <div
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                        critical
+                          ? "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
+                          : "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400"
+                      }`}
+                    >
+                      <AlertTriangle className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-200">{row.partNo}</p>
+                      <p className="truncate text-xs text-slate-400 dark:text-slate-500">{row.description}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <p className="font-display text-sm font-bold tabular-nums text-slate-900 dark:text-slate-100">
                         {formatNumber(row.availableQty)} {row.unit}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </p>
+                      <Badge tone={critical ? "danger" : "warning"}>{critical ? "Out of stock" : "Low"}</Badge>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <EmptyState title="Nothing low on stock" description="Every part is above its threshold. Nice work." />
