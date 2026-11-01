@@ -20,6 +20,8 @@ import {
   Plus,
   Minus,
   ClipboardList,
+  PackageSearch,
+  Info,
 } from "lucide-react";
 import { apiClient, getApiErrorMessage } from "@/lib/apiClient";
 import type { InventoryRow, PagedResult, Invoice, CustomerInput, LocationRef, PartUnit } from "@/types";
@@ -364,22 +366,22 @@ function CartRowDesktop({
   }
 
   return (
-    <div className="relative rounded-2xl border border-slate-200 bg-white p-5 dark:border-navy-700 dark:bg-navy-900">
+    <div className="relative rounded-xl border border-slate-200 bg-white p-4 dark:border-navy-700 dark:bg-navy-900">
       {showRemove && (
-        <button onClick={onRemove} className="absolute right-4 top-4 rounded-md p-1.5 text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">
+        <button onClick={onRemove} className="absolute right-3.5 top-3.5 rounded-md p-1.5 text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">
           <Trash2 className="h-4 w-4" />
         </button>
       )}
-      {index > 0 && <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Part {index + 1}</p>}
+      {index > 0 && <p className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Part {index + 1}</p>}
 
-      <div className="grid grid-cols-1 gap-5 pr-8 xl:grid-cols-[1fr_17rem] xl:items-start">
+      <div className={cn("grid grid-cols-1 gap-4 xl:grid-cols-[1fr_16rem] xl:items-start", showRemove && "pr-8")}>
         <div>
           <Label>Find part *</Label>
           <div className="flex gap-2">
             <div ref={anchorRef} className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <Input
-                className="h-11 pl-9 text-[15px]"
+                className="h-10 pl-9"
                 placeholder="Type part no. or name..."
                 value={row.query}
                 onChange={(e) => {
@@ -393,7 +395,7 @@ function CartRowDesktop({
             <button
               type="button"
               onClick={() => row.setOpen((v) => !v)}
-              className="flex h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 px-3.5 text-sm font-semibold text-brand-600 hover:bg-brand-50 dark:border-navy-600 dark:text-brand-400 dark:hover:bg-brand-500/10"
+              className="flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 px-3 text-sm font-semibold text-brand-600 hover:bg-brand-50 dark:border-navy-600 dark:text-brand-400 dark:hover:bg-brand-500/10"
             >
               <Plus className="h-4 w-4" /> Browse stock
             </button>
@@ -409,7 +411,7 @@ function CartRowDesktop({
           {/* Preview strip — dashed while nothing's matched yet, filled in once a part is */}
           <div
             className={cn(
-              "mt-3 grid grid-cols-3 gap-4 rounded-xl border px-4 py-3",
+              "mt-2.5 grid grid-cols-3 gap-3 rounded-lg border px-3.5 py-2.5",
               line.inventoryId ? "border-slate-200 bg-slate-50 dark:border-navy-700 dark:bg-navy-800" : "border-dashed border-slate-300 dark:border-navy-700"
             )}
           >
@@ -434,7 +436,7 @@ function CartRowDesktop({
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div>
               <Label>Quantity *</Label>
               <div className={cn("flex h-9 items-center overflow-hidden rounded-lg border", overStock ? "border-red-400 dark:border-red-500/60" : "border-slate-300 dark:border-navy-600")}>
@@ -546,9 +548,9 @@ function CartRowDesktop({
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-navy-700 dark:bg-navy-800">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 dark:border-navy-700 dark:bg-navy-800">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Summary</p>
-          <div className="mt-3 space-y-1.5 text-sm">
+          <div className="mt-2.5 space-y-1.5 text-sm">
             <div className="flex justify-between text-slate-500 dark:text-slate-400">
               <span>Subtotal</span>
               <span>{formatCurrency(lineSubtotal)}</span>
@@ -572,24 +574,46 @@ function CartRowDesktop({
   );
 }
 
-function CartRowMobile({ line, otherInventoryIds, onUpdate, onRemove }: { line: CartLine; otherInventoryIds: Set<string>; onUpdate: (patch: Partial<CartLine>) => void; onRemove: () => void }) {
+function CartRowMobile({
+  line,
+  showRemove,
+  otherInventoryIds,
+  onUpdate,
+  onRemove,
+}: {
+  line: CartLine;
+  showRemove: boolean;
+  otherInventoryIds: Set<string>;
+  onUpdate: (patch: Partial<CartLine>) => void;
+  onRemove: () => void;
+}) {
   const row = useCartRow(line, onUpdate, otherInventoryIds);
   const anchorRef = useRef<HTMLDivElement>(null);
   const qtyMissing = line.quantity === "";
   const priceMissing = line.sellingPrice === "";
   const priceNegative = !priceMissing && Number(line.sellingPrice) < 0;
   const overStock = !qtyMissing && Number(line.quantity) > line.availableQty;
-  const lineTotal = (line.sellingPrice === "" ? 0 : line.sellingPrice) * (line.quantity === "" ? 0 : line.quantity);
+  const qtyNum = line.quantity === "" ? 0 : line.quantity;
+  const priceNum = line.sellingPrice === "" ? 0 : line.sellingPrice;
+  const mrpNum = line.mrp === "" ? 0 : line.mrp;
+  const lineGrandTotal = Math.round(priceNum * qtyNum * 100) / 100;
+  const { taxableValue: lineSubtotal, taxAmount: lineTax } = splitTaxInclusiveAmount(lineGrandTotal, line.taxPercent);
+  const discountPerUnit = line.mrp !== "" && line.sellingPrice !== "" ? Math.max(0, Math.round((mrpNum - priceNum) * 100) / 100) : 0;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-navy-700 dark:bg-navy-900">
-      <div className="p-3.5">
-        <div ref={anchorRef} className="flex gap-2">
+    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-navy-700 dark:bg-navy-900">
+      {showRemove && (
+        <button onClick={onRemove} className="absolute right-2.5 top-2.5 z-10 rounded-md p-1.5 text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">
+          <Trash2 className="h-4 w-4" />
+        </button>
+      )}
+      <div className="p-3">
+        <div ref={anchorRef} className="flex gap-2 pr-8">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
             <Input
               className="pl-9"
-              placeholder="Search Part No / Description"
+              placeholder="Search part no. or name"
               value={row.query}
               onChange={(e) => {
                 row.setQuery(e.target.value);
@@ -599,145 +623,132 @@ function CartRowMobile({ line, otherInventoryIds, onUpdate, onRemove }: { line: 
               onFocus={() => row.setOpen(true)}
             />
           </div>
-          <button onClick={onRemove} className="shrink-0 rounded-lg border border-slate-200 p-2 text-red-500 hover:bg-red-50 dark:border-navy-700 dark:text-red-400 dark:hover:bg-red-500/10">
-            <Trash2 className="h-4 w-4" />
+          <button
+            type="button"
+            onClick={() => row.setOpen((v) => !v)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-600 hover:bg-brand-100 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-400"
+            aria-label="Browse stock"
+          >
+            <PackageSearch className="h-4 w-4" />
           </button>
         </div>
-        <PartSearchDropdown
-          anchorRef={anchorRef}
-          open={row.open && row.query.trim().length > 0}
-          onClose={() => row.setOpen(false)}
-          results={row.results?.items}
-          onSelect={(r) => row.applyMatch(r, true)}
-        />
+        <PartSearchDropdown anchorRef={anchorRef} open={row.open} onClose={() => row.setOpen(false)} results={row.results?.items} onSelect={(r) => row.applyMatch(r, true)} />
 
-        {line.inventoryId && (
-          <>
-            <div className="mt-3 flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100" title={line.description}>
-                  {line.description}
-                </p>
-                <p className="truncate text-xs text-slate-500 dark:text-slate-400" title={line.partNo}>
-                  {line.partNo}
-                </p>
-                <CategoryBadge category={line.category} className="mt-1" />
-              </div>
+        {line.inventoryId ? (
+          <div className="mt-2.5 flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100" title={line.description}>
+                {line.description}
+              </p>
+              <p className="truncate text-xs text-slate-500 dark:text-slate-400" title={line.partNo}>
+                {line.partNo}
+              </p>
+              <CategoryBadge category={line.category} className="mt-1" />
             </div>
-
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <div>
-                <Label className="text-xs">Store</Label>
-                <Select className="h-9" value={line.store?.id ?? ""} disabled={row.stores.length === 0} onChange={(e) => row.selectStore(e.target.value)}>
-                  {row.stores.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name ?? s.code}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs">Bin</Label>
-                <Select className="h-9" value={line.bin?.id ?? ""} disabled={row.binsForStore.length === 0} onChange={(e) => row.selectBin(e.target.value)}>
-                  {row.binsForStore.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.code}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs">Rack</Label>
-                <Select className="h-9" value={line.rack?.id ?? ""} disabled={row.racksForStoreBin.length === 0} onChange={(e) => row.selectRack(e.target.value)}>
-                  {row.racksForStoreBin.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.code}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            </div>
-
-            <div className="mt-2.5 grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">
-                  Qty ({line.unit}, avail. {line.availableQty})
-                </Label>
-                <Input
-                  className={overStock ? "border-red-400 dark:border-red-500/60" : ""}
-                  type="number"
-                  inputMode={unitAllowsDecimalQuantity(line.unit) ? "decimal" : "numeric"}
-                  step={unitAllowsDecimalQuantity(line.unit) ? 0.001 : 1}
-                  min={unitAllowsDecimalQuantity(line.unit) ? 0.001 : 1}
-                  placeholder="Enter quantity"
-                  value={line.quantity}
-                  onChange={(e) => onUpdate({ quantity: e.target.value === "" ? "" : Number(e.target.value) })}
-                />
-              </div>
-              <div>
-                <Label className="text-xs">MRP</Label>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step={0.01}
-                  value={line.mrp}
-                  onChange={(e) => {
-                    const mrp = e.target.value === "" ? "" : Number(e.target.value);
-                    if (mrp === "") return onUpdate({ mrp: "" });
-                    const discount = line.discountPercent === "" ? 0 : line.discountPercent;
-                    onUpdate({ mrp, sellingPrice: priceFromDiscount(mrp, discount) });
-                  }}
-                />
-              </div>
-            </div>
-            <div className="mt-2.5 grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Discount %</Label>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  step={0.01}
-                  placeholder="0"
-                  value={line.discountPercent}
-                  onChange={(e) => {
-                    const mrp = line.mrp === "" ? 0 : line.mrp;
-                    const discountPercent = e.target.value === "" ? "" : Number(e.target.value);
-                    if (discountPercent === "") return onUpdate({ discountPercent: "", sellingPrice: mrp });
-                    onUpdate({ discountPercent, sellingPrice: priceFromDiscount(mrp, discountPercent) });
-                  }}
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Selling Price</Label>
-                <Input
-                  className={priceMissing || priceNegative ? "border-red-400 dark:border-red-500/60" : ""}
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step={0.01}
-                  value={line.sellingPrice}
-                  onChange={(e) => {
-                    const sellingPrice = e.target.value === "" ? "" : Number(e.target.value);
-                    if (sellingPrice === "") return onUpdate({ sellingPrice: "" });
-                    const mrp = line.mrp === "" ? 0 : line.mrp;
-                    onUpdate({ sellingPrice, discountPercent: discountFromPrice(mrp, sellingPrice) });
-                  }}
-                />
-              </div>
-            </div>
-            {qtyMissing && <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-400">Quantity is required.</p>}
-            {priceMissing && <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-400">Selling price is required.</p>}
-            {priceNegative && <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">Selling price can't be negative — lower the discount %.</p>}
-            {overStock && <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">Insufficient stock. Available quantity is {line.availableQty}.</p>}
-          </>
+          </div>
+        ) : (
+          <div className="mt-2.5 flex items-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2.5 text-xs text-slate-400 dark:border-navy-700 dark:text-slate-500">
+            <Info className="h-3.5 w-3.5 shrink-0" />
+            Pick a part to see description, category &amp; stock
+          </div>
         )}
+
+        <div className="mt-2.5 grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs">Quantity *</Label>
+            <Input
+              className={overStock ? "border-red-400 dark:border-red-500/60" : ""}
+              type="number"
+              inputMode={unitAllowsDecimalQuantity(line.unit) ? "decimal" : "numeric"}
+              step={unitAllowsDecimalQuantity(line.unit) ? 0.001 : 1}
+              min={unitAllowsDecimalQuantity(line.unit) ? 0.001 : 1}
+              placeholder="0"
+              value={line.quantity}
+              onChange={(e) => onUpdate({ quantity: e.target.value === "" ? "" : Number(e.target.value) })}
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Selling price *</Label>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 dark:text-slate-500">₹</span>
+              <Input
+                className={cn("pl-7", (priceMissing || priceNegative) && "border-red-400 dark:border-red-500/60")}
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step={0.01}
+                placeholder="0.00"
+                value={line.sellingPrice}
+                onChange={(e) => {
+                  const sellingPrice = e.target.value === "" ? "" : Number(e.target.value);
+                  if (sellingPrice === "") return onUpdate({ sellingPrice: "" });
+                  const mrp = line.mrp === "" ? 0 : line.mrp;
+                  onUpdate({ sellingPrice, discountPercent: discountFromPrice(mrp, sellingPrice) });
+                }}
+              />
+            </div>
+          </div>
+        </div>
+        <div className="mt-2.5 grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs">MRP</Label>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 dark:text-slate-500">₹</span>
+              <Input
+                className="pl-7"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step={0.01}
+                placeholder="Auto"
+                value={line.mrp}
+                onChange={(e) => {
+                  const mrp = e.target.value === "" ? "" : Number(e.target.value);
+                  if (mrp === "") return onUpdate({ mrp: "" });
+                  const discount = line.discountPercent === "" ? 0 : line.discountPercent;
+                  onUpdate({ mrp, sellingPrice: priceFromDiscount(mrp, discount) });
+                }}
+              />
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Discount (opt.)</Label>
+            <div className="relative">
+              <Input
+                className="pr-7"
+                type="number"
+                inputMode="decimal"
+                step={0.01}
+                placeholder="0"
+                value={line.discountPercent}
+                onChange={(e) => {
+                  const mrp = line.mrp === "" ? 0 : line.mrp;
+                  const discountPercent = e.target.value === "" ? "" : Number(e.target.value);
+                  if (discountPercent === "") return onUpdate({ discountPercent: "", sellingPrice: mrp });
+                  onUpdate({ discountPercent, sellingPrice: priceFromDiscount(mrp, discountPercent) });
+                }}
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 dark:text-slate-500">%</span>
+            </div>
+          </div>
+        </div>
+        {qtyMissing && <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-400">Quantity is required.</p>}
+        {priceMissing && <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-400">Selling price is required.</p>}
+        {priceNegative && <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">Selling price can't be negative — lower the discount %.</p>}
+        {overStock && <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">Only {line.availableQty} {line.unit} available.</p>}
       </div>
 
       {line.inventoryId && (
-        <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/60 px-3.5 py-2.5 text-xs dark:border-navy-800 dark:bg-navy-800/40">
-          <Badge tone="neutral">Tax {line.taxPercent}%</Badge>
-          <span className="font-semibold text-slate-900 dark:text-slate-100">Line total: {formatCurrency(lineTotal)}</span>
+        <div className="border-t border-slate-100 bg-slate-50/60 px-3 py-2.5 dark:border-navy-800 dark:bg-navy-800/40">
+          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+            <span>Subtotal {formatCurrency(lineSubtotal)}</span>
+            <span>Disc − {formatCurrency(discountPerUnit * qtyNum)}</span>
+            <span>Tax {line.taxPercent}% {formatCurrency(lineTax)}</span>
+          </div>
+          <div className="mt-1 flex items-center justify-between">
+            <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Line Total</span>
+            <span className="text-base font-bold text-brand-600 dark:text-brand-400">{formatCurrency(lineGrandTotal)}</span>
+          </div>
         </div>
       )}
     </div>
@@ -1050,9 +1061,9 @@ export function SellPartPage() {
 
       {step === "cart" && (
         <>
-          <div className="space-y-4">
+          <div className="space-y-3">
             <Card>
-              <CardContent className="p-5">
+              <CardContent className="p-4">
                 <SectionHeader
                   step={1}
                   title="Part Details"
@@ -1070,7 +1081,7 @@ export function SellPartPage() {
                 />
 
                 {/* Desktop: one full-width card per part */}
-                <div className="hidden space-y-4 lg:block">
+                <div className="hidden space-y-3 lg:block">
                   {cart.map((line, i) => (
                     <CartRowDesktop
                       key={line.key}
@@ -1090,6 +1101,7 @@ export function SellPartPage() {
                     <CartRowMobile
                       key={line.key}
                       line={line}
+                      showRemove={cart.length > 1}
                       otherInventoryIds={new Set(cart.filter((l) => l.key !== line.key && l.inventoryId).map((l) => l.inventoryId!))}
                       onUpdate={(patch) => updateRow(line.key, patch)}
                       onRemove={() => removeRow(line.key)}
@@ -1100,10 +1112,10 @@ export function SellPartPage() {
             </Card>
 
             <Card>
-              <CardContent className="p-5">
-                <div className="mb-4 flex items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
-                    <ClipboardList className="h-5 w-5" />
+              <CardContent className="p-4">
+                <div className="mb-3 flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
+                    <ClipboardList className="h-4.5 w-4.5" />
                   </div>
                   <p className="text-base font-bold text-slate-900 dark:text-slate-100">Order Summary</p>
                 </div>
@@ -1129,7 +1141,7 @@ export function SellPartPage() {
             </Card>
 
             <Card>
-              <CardContent className="space-y-4 p-5">
+              <CardContent className="space-y-3 p-4">
                 <SectionHeader step={2} title="Customer Details" />
 
                   <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
