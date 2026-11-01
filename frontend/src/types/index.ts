@@ -358,6 +358,11 @@ export interface Invoice {
   items: InvoiceItem[];
   createdBy?: { firstName: string; lastName: string; email?: string };
   cancelledBy?: { firstName: string; lastName: string } | null;
+  // Set when this invoice was created by "Raise Invoice Again" against a
+  // cancelled invoice, or when this (cancelled) invoice has already had
+  // that done to it — see InvoiceDetailPage.
+  reissuedFromInvoice?: { id: string; invoiceNumber: string } | null;
+  reissuedInvoices?: { id: string; invoiceNumber: string }[];
   tenant?: {
     name: string;
     dealerCode: string;
@@ -411,6 +416,11 @@ export interface ReturnableSource {
   reference: string | null;
   status: string;
   requiresCancellationFirst: boolean;
+  // INVOICE only — set once "Raise Invoice Again" has already been used
+  // against this (cancelled) invoice; null for ISSUE and for an invoice
+  // not yet reissued.
+  reissuedAsInvoiceNumber: string | null;
+  reissuedAsInvoiceId: string | null;
   items: ReturnableItem[];
 }
 

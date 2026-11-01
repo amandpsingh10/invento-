@@ -826,6 +826,13 @@ model Invoice {
   cancelledBy         User?        @relation("InvoiceCancelledBy", fields: [cancelledById], references: [id])
   cancelledAt         DateTime?
   cancellationReason  String?
+  // Set when this invoice was created by "Raise Invoice Again" against a
+  // cancelled invoice's still-unreturned quantity (see sales.service.ts
+  // reissueInvoice) — lets the UI both show where this invoice came from
+  // and block reissuing the same source invoice a second time.
+  reissuedFromInvoiceId String?
+  reissuedFromInvoice   Invoice?  @relation("InvoiceReissue", fields: [reissuedFromInvoiceId], references: [id])
+  reissuedInvoices      Invoice[] @relation("InvoiceReissue")
 
   items       InvoiceItem[]
   stockLedger StockLedger[]
@@ -835,6 +842,7 @@ model Invoice {
   @@index([tenantId])
   @@index([tenantId, customerId])
   @@index([tenantId, status])
+  @@index([reissuedFromInvoiceId])
   @@map("invoices")
 }
 

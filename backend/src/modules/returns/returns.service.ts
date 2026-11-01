@@ -29,6 +29,8 @@ export async function getReturnableIssue(tenantId: string, issueNumber: string) 
     reference: issue.reference,
     status: issue.status,
     requiresCancellationFirst: false,
+    reissuedAsInvoiceNumber: null as string | null,
+    reissuedAsInvoiceId: null as string | null,
     items: issue.items.map((item) => ({
       id: item.id,
       kind: "ISSUE_ITEM" as const,
@@ -62,6 +64,7 @@ export async function getReturnableInvoice(tenantId: string, invoiceNumber: stri
     include: {
       customer: true,
       items: { include: { part: true, inventory: { include: { store: true, bin: true, rack: true } } } },
+      reissuedInvoices: { select: { id: true, invoiceNumber: true }, take: 1 },
     },
   });
   if (!invoice) throw ApiError.notFound(`Invoice "${invoiceNumber}" not found`);
@@ -76,6 +79,11 @@ export async function getReturnableInvoice(tenantId: string, invoiceNumber: stri
     reference: `${invoice.customer.name} — ${invoice.customer.mobile}`,
     status: invoice.status,
     requiresCancellationFirst,
+    // Once a cancelled invoice has been reissued (see sales.service.ts
+    // reissueInvoice), the frontend stops offering "Raise Invoice Again"
+    // for it and links to the resulting invoice instead.
+    reissuedAsInvoiceNumber: invoice.reissuedInvoices[0]?.invoiceNumber ?? null,
+    reissuedAsInvoiceId: invoice.reissuedInvoices[0]?.id ?? null,
     items: invoice.items.map((item) => ({
       id: item.id,
       kind: "INVOICE_ITEM" as const,

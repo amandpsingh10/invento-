@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Printer, Ban, Undo2 } from "lucide-react";
+import { Printer, Ban, Undo2, FileText } from "lucide-react";
 import { apiClient, getApiErrorMessage } from "@/lib/apiClient";
 import type { Invoice } from "@/types";
 import { PageHeader, Skeleton } from "@/components/ui/Feedback";
@@ -43,6 +43,18 @@ export function InvoiceDetailPage() {
     onError: (err) => push({ tone: "error", title: "Unable to cancel invoice", description: getApiErrorMessage(err) }),
   });
 
+  const reissueInvoice = useMutation({
+    mutationFn: async () => apiClient.post<{ data: Invoice }>(`/invoices/${id}/reissue`),
+    onSuccess: (res) => {
+      push({ tone: "success", title: "Invoice raised", description: `Invoice ${res.data.data.invoiceNumber} created for the remaining parts.` });
+      queryClient.invalidateQueries({ queryKey: ["invoice", id] });
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      navigate(`/invoices/${res.data.data.id}`);
+    },
+    onError: (err) => push({ tone: "error", title: "Unable to raise invoice", description: getApiErrorMessage(err) }),
+  });
+
   function handleConfirmCancel() {
     if (!reason.trim()) {
       setReasonError("A cancellation reason is required");
@@ -60,6 +72,8 @@ export function InvoiceDetailPage() {
       </div>
     );
   }
+
+  const hasUnreturnedQty = invoice.items.some((item) => item.quantity - item.returnedQty > 0);
 
   return (
     <div>
@@ -91,6 +105,11 @@ export function InvoiceDetailPage() {
                   <Undo2 className="h-4 w-4" /> Return
                 </Button>
               </Link>
+            )}
+            {invoice.status === "CANCELLED" && !invoice.reissuedInvoices?.length && hasUnreturnedQty && (
+              <Button size="sm" variant="outline" isLoading={reissueInvoice.isPending} onClick={() => reissueInvoice.mutate()}>
+                <FileText className="h-4 w-4" /> Raise Invoice Again
+              </Button>
             )}
           </>
         }
@@ -180,6 +199,24 @@ export function InvoiceDetailPage() {
                   {invoice.cancelledBy?.firstName} {invoice.cancelledBy?.lastName}
                 </p>
                 {invoice.cancellationReason && <p className="mt-1 text-slate-500 dark:text-slate-400">{invoice.cancellationReason}</p>}
+              </div>
+            )}
+            {invoice.reissuedInvoices?.[0] && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400">
+                Remaining parts were re-billed as invoice{" "}
+                <Link to={`/invoices/${invoice.reissuedInvoices[0].id}`} className="font-semibold underline">
+                  {invoice.reissuedInvoices[0].invoiceNumber}
+                </Link>
+                .
+              </div>
+            )}
+            {invoice.reissuedFromInvoice && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-navy-700 dark:bg-navy-800 dark:text-slate-300">
+                Raised from cancelled invoice{" "}
+                <Link to={`/invoices/${invoice.reissuedFromInvoice.id}`} className="font-semibold underline">
+                  {invoice.reissuedFromInvoice.invoiceNumber}
+                </Link>
+                .
               </div>
             )}
           </CardContent>

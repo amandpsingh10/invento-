@@ -68,4 +68,14 @@ router.post(
   })
 );
 
+router.post(
+  "/:id/reissue",
+  requireRole(...ROLE_GROUPS.canIssueOrReturn),
+  asyncHandler(async (req, res) => {
+    const tenantId = requireTenantId(req);
+    const invoice = await salesService.reissueInvoice(tenantId, req.user!.id, req.params.id, req);
+    res.status(201).json({ success: true, data: invoice });
+  })
+);
+
 export default router;

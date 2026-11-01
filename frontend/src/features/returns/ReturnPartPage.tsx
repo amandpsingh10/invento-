@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Search, Undo2, AlertTriangle, Ban, FileText, Info, Boxes, CheckCircle2, X } from "lucide-react";
 import { apiClient, getApiErrorMessage } from "@/lib/apiClient";
@@ -31,6 +31,7 @@ function splitSourceReference(reference: string | null): [string | null, string 
 
 export function ReturnPartPage() {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   const [query, setQuery] = useState(params.get("issueNumber") ?? params.get("invoiceNumber") ?? "");
   const [searchResults, setSearchResults] = useState<ReturnableSearchResult[]>([]);
   const [source, setSource] = useState<ReturnableSource | null>(null);
@@ -110,6 +111,25 @@ export function ReturnPartPage() {
     cancelInvoice.mutate();
   }
 
+  const reissueInvoice = useMutation({
+    mutationFn: async () => apiClient.post<{ data: { id: string; invoiceNumber: string } }>(`/invoices/${source!.id}/reissue`),
+    onSuccess: (res) => {
+      push({ tone: "success", title: "Invoice raised", description: `Invoice ${res.data.data.invoiceNumber} created for the remaining parts.` });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      navigate(`/invoices/${res.data.data.id}`);
+    },
+    onError: (err) => push({ tone: "error", title: "Unable to raise invoice", description: getApiErrorMessage(err) }),
+  });
+
+  // Whether this (cancelled) invoice still has parts the customer kept —
+  // i.e. not every item was fully returned — and hasn't already been
+  // reissued, which is exactly when "Raise Invoice Again" makes sense.
+  const canReissue =
+    source?.kind === "INVOICE" &&
+    source.status === "CANCELLED" &&
+    !source.reissuedAsInvoiceNumber &&
+    source.items.some((item) => item.remainingReturnableQty > 0);
+
   const selectedItems = source ? source.items.filter((item) => selectedQty.has(item.id)) : [];
   const hasInvalidSelection = selectedItems.some((item) => {
     const q = selectedQty.get(item.id);
@@ -166,7 +186,14 @@ export function ReturnPartPage() {
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       setSelectedQty(new Map());
-      if (failures.length === 0) {
+      // For an invoice return, stay on this screen and reload it — the
+      // dealer may still have parts the customer kept (not returned), and
+      // seeing the updated Remaining column is what surfaces the "Raise
+      // Invoice Again" option below instead of losing the invoice context.
+      if (source?.kind === "INVOICE") {
+        setRemarks("");
+        await loadSource("INVOICE", source.number);
+      } else if (failures.length === 0) {
         setRemarks("");
         setQuery("");
         setSource(null);
@@ -396,6 +423,27 @@ export function ReturnPartPage() {
                     })}
                   </div>
                 </div>
+
+                {canReissue && (
+                  <div className="mx-4 mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-500/30 dark:bg-blue-500/10">
+                    <div className="flex items-start gap-2 text-sm text-blue-800 dark:text-blue-400">
+                      <FileText className="mt-0.5 h-4 w-4 shrink-0" />
+                      <p>The customer kept some parts from this cancelled invoice — raise a new invoice for what wasn't returned.</p>
+                    </div>
+                    <Button size="sm" className="mt-2" isLoading={reissueInvoice.isPending} onClick={() => reissueInvoice.mutate()}>
+                      <FileText className="h-4 w-4" /> Raise Invoice Again
+                    </Button>
+                  </div>
+                )}
+                {source.kind === "INVOICE" && source.reissuedAsInvoiceNumber && (
+                  <div className="mx-4 mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-navy-700 dark:bg-navy-800 dark:text-slate-300">
+                    Remaining parts were already re-billed as invoice{" "}
+                    <Link to={`/invoices/${source.reissuedAsInvoiceId}`} className="font-semibold underline">
+                      {source.reissuedAsInvoiceNumber}
+                    </Link>
+                    .
+                  </div>
+                )}
               </div>
             )}
 

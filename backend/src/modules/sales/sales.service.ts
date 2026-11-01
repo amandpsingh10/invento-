@@ -275,6 +275,122 @@ export async function cancelInvoice(tenantId: string, userId: string, invoiceId:
   return updated;
 }
 
+/**
+ * Re-bills whatever a cancelled invoice's items still show as "sold and
+ * never returned" — the scenario where a dealer cancels a 5-qty invoice,
+ * returns only 2, and still needs a valid GST invoice for the 3 the
+ * customer kept, since the original invoice no longer exists as a bill.
+ * Deliberately does NOT touch inventory or the stock ledger: that stock
+ * already left (at the original sale) and was never returned for this
+ * remaining quantity, so no further stock movement is happening here —
+ * this is a billing-only correction, not a new sale.
+ */
+export async function reissueInvoice(tenantId: string, userId: string, sourceInvoiceId: string, req?: Request) {
+  const source = await prisma.invoice.findFirst({
+    where: { id: sourceInvoiceId, tenantId },
+    include: { items: { include: { part: true } }, customer: true },
+  });
+  if (!source) throw ApiError.notFound("Invoice not found");
+
+  if (source.status !== "CANCELLED") {
+    throw ApiError.unprocessable("Only a cancelled invoice can be reissued.", "INVOICE_NOT_CANCELLED");
+  }
+
+  const alreadyReissued = await prisma.invoice.findFirst({ where: { reissuedFromInvoiceId: source.id } });
+  if (alreadyReissued) {
+    throw ApiError.conflict(`Already reissued as invoice ${alreadyReissued.invoiceNumber}.`, "ALREADY_REISSUED");
+  }
+
+  const remainingItems = source.items.filter((item) => Number(item.quantity) - Number(item.returnedQty) > 0);
+  if (remainingItems.length === 0) {
+    throw ApiError.unprocessable("Nothing left to re-invoice — every item on this invoice was returned.", "NOTHING_TO_REISSUE");
+  }
+
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { state: true } });
+  const isIntraState =
+    !!tenant.state && !!source.customer.state && normalizeState(tenant.state) === normalizeState(source.customer.state);
+
+  const invoiceId = await prisma.$transaction(async (tx) => {
+    const invoiceNumber = await nextSequenceNumber(tx, tenantId, "INV");
+
+    let subtotal = 0;
+    let taxAmount = 0;
+    const itemsToCreate = remainingItems.map((item) => {
+      const remainingQty = Number(item.quantity) - Number(item.returnedQty);
+      const sellingPrice = Number(item.sellingPrice);
+      const taxPercent = Number(item.taxPercent);
+      const lineTotal = Math.round(sellingPrice * remainingQty * 100) / 100;
+      const { taxableValue: lineAmount, taxAmount: lineTax } = splitTaxInclusiveAmount(lineTotal, taxPercent);
+
+      const cgstAmount = isIntraState ? Math.round((lineTax / 2) * 100) / 100 : 0;
+      const sgstAmount = isIntraState ? Math.round((lineTax - cgstAmount) * 100) / 100 : 0;
+      const igstAmount = isIntraState ? 0 : lineTax;
+
+      subtotal += lineAmount;
+      taxAmount += lineTax;
+
+      return {
+        partId: item.partId,
+        inventoryId: item.inventoryId,
+        quantity: remainingQty,
+        sellingPrice,
+        taxPercent,
+        taxAmount: lineTax,
+        taxType: isIntraState ? "CGST_SGST" : "IGST",
+        cgstAmount,
+        sgstAmount,
+        igstAmount,
+        lineTotal,
+      };
+    });
+
+    subtotal = Math.round(subtotal * 100) / 100;
+    taxAmount = Math.round(taxAmount * 100) / 100;
+    const grandTotal = Math.round((subtotal + taxAmount) * 100) / 100;
+
+    const invoice = await tx.invoice.create({
+      data: {
+        tenantId,
+        invoiceNumber,
+        customerId: source.customerId,
+        status: "COMPLETED",
+        subtotal,
+        taxAmount,
+        grandTotal,
+        createdById: userId,
+        reissuedFromInvoiceId: source.id,
+        items: { create: itemsToCreate },
+      },
+    });
+
+    return invoice.id;
+  });
+
+  await recordAudit({
+    req,
+    tenantId,
+    userId,
+    action: "INVOICE_REISSUED",
+    entityType: "Invoice",
+    entityId: invoiceId,
+    oldValue: { reissuedFromInvoiceId: source.id, reissuedFromInvoiceNumber: source.invoiceNumber },
+  });
+
+  const invoice = await getInvoice(tenantId, invoiceId);
+
+  await prisma.notification.create({
+    data: {
+      tenantId,
+      userId,
+      type: "SALE_SUCCESS",
+      title: "Invoice reissued",
+      message: `Invoice ${invoice.invoiceNumber} raised for the remaining parts from ${source.invoiceNumber}.`,
+    },
+  });
+
+  return invoice;
+}
+
 /** quantity/returnedQty are Decimal(12,3) in the DB (fractional ML/KGS support) — Number()-converted so the API keeps returning plain numbers, matching the existing frontend contract. */
 function mapInvoiceQuantities<T extends { items: Array<{ quantity: unknown; returnedQty: unknown }> }>(invoice: T) {
   return { ...invoice, items: invoice.items.map((item) => ({ ...item, quantity: Number(item.quantity), returnedQty: Number(item.returnedQty) })) };
@@ -321,6 +437,8 @@ export async function getInvoice(tenantId: string, id: string) {
       createdBy: { select: { firstName: true, lastName: true, email: true } },
       cancelledBy: { select: { firstName: true, lastName: true } },
       tenant: { select: { name: true, dealerCode: true, address: true, phone: true, email: true, state: true, pincode: true, gstin: true } },
+      reissuedFromInvoice: { select: { id: true, invoiceNumber: true } },
+      reissuedInvoices: { select: { id: true, invoiceNumber: true }, take: 1 },
     },
   });
   if (!invoice) throw ApiError.notFound("Invoice not found");
