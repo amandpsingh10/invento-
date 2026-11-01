@@ -65,23 +65,28 @@ export function PageHeader({
   onBack?: () => void;
 }) {
   const navigate = useNavigate();
+  // The native Android app handles Back via the hardware/gesture button
+  // (see hardwareBack.ts) — an in-screen Back button next to that reads as
+  // duplicated chrome, so it only renders on web.
+  const showBack = !hideBack && !isNativePlatform();
   return (
-    <div className="mb-6">
-      {/* The native Android app handles Back via the hardware/gesture
-          button (see hardwareBack.ts) — an in-screen Back button next to
-          that reads as duplicated chrome, so it only renders on web. */}
-      {!hideBack && !isNativePlatform() && (
-        <button
-          onClick={() => (onBack ? onBack() : navigate(-1))}
-          className="mb-3 inline-flex items-center gap-1.5 rounded-lg py-1 text-sm font-medium text-slate-500 hover:text-slate-800 active:scale-[0.98] dark:text-slate-400 dark:hover:text-slate-100"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back
-        </button>
-      )}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+    <div className="mb-4">
+      {/* Back and the breadcrumb trail share one compact line instead of
+          each taking a full row — that extra row was most of the "dead"
+          space at the top of every screen, add up fast on a phone. */}
+      {(showBack || breadcrumbs) && (
+        <div className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-400 dark:text-slate-500">
+          {showBack && (
+            <button
+              onClick={() => (onBack ? onBack() : navigate(-1))}
+              className="inline-flex shrink-0 items-center gap-1 text-slate-500 hover:text-slate-800 active:scale-[0.98] dark:text-slate-400 dark:hover:text-slate-100"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Back
+            </button>
+          )}
+          {showBack && breadcrumbs && <span className="text-slate-300 dark:text-slate-600">|</span>}
           {breadcrumbs && (
-            <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-400 dark:text-slate-500">
+            <div className="flex min-w-0 items-center gap-1.5 truncate">
               {breadcrumbs.map((b, i) => (
                 <span key={i} className="flex items-center gap-1.5">
                   {i > 0 && <span>/</span>}
@@ -90,6 +95,10 @@ export function PageHeader({
               ))}
             </div>
           )}
+        </div>
+      )}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
           <h1 className="font-display text-xl font-bold text-slate-900 dark:text-slate-100">{title}</h1>
           {subtitle && <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>}
         </div>
