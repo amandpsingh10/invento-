@@ -20,8 +20,6 @@ import {
   Plus,
   Minus,
   ClipboardList,
-  PackageSearch,
-  Info,
 } from "lucide-react";
 import { apiClient, getApiErrorMessage } from "@/lib/apiClient";
 import type { InventoryRow, PagedResult, Invoice, CustomerInput, LocationRef, PartUnit } from "@/types";
@@ -31,7 +29,6 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { Input, Label, Select, Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge, stockStatusTone } from "@/components/ui/Badge";
-import { CategoryBadge } from "@/components/ui/CategoryBadge";
 import { Dialog } from "@/components/ui/Dialog";
 import { PortalDropdown } from "@/components/ui/PortalDropdown";
 import { useToast } from "@/components/ui/Toast";
@@ -521,164 +518,162 @@ function CartRowMobile({
   const priceMissing = line.sellingPrice === "";
   const priceNegative = !priceMissing && Number(line.sellingPrice) < 0;
   const overStock = !qtyMissing && Number(line.quantity) > line.availableQty;
-  const qtyNum = line.quantity === "" ? 0 : line.quantity;
-  const priceNum = line.sellingPrice === "" ? 0 : line.sellingPrice;
   const mrpNum = line.mrp === "" ? 0 : line.mrp;
-  const lineGrandTotal = Math.round(priceNum * qtyNum * 100) / 100;
-  const { taxableValue: lineSubtotal, taxAmount: lineTax } = splitTaxInclusiveAmount(lineGrandTotal, line.taxPercent);
-  const discountPerUnit = line.mrp !== "" && line.sellingPrice !== "" ? Math.max(0, Math.round((mrpNum - priceNum) * 100) / 100) : 0;
+  const priceNum = line.sellingPrice === "" ? 0 : line.sellingPrice;
+  // Read directly off mrp - sellingPrice, same fix as the desktop row —
+  // see its comment for why this can't be derived from discountPercent.
+  const discountAmount = line.mrp !== "" && line.sellingPrice !== "" ? Math.round((mrpNum - priceNum) * 100) / 100 : "";
+
+  function stepQuantity(direction: 1 | -1) {
+    const step = unitAllowsDecimalQuantity(line.unit) ? 0.001 : 1;
+    const current = line.quantity === "" ? 0 : line.quantity;
+    const next = Math.max(step, Math.round((current + direction * step) * 1000) / 1000);
+    onUpdate({ quantity: next });
+  }
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-navy-700 dark:bg-navy-900">
-      {showRemove && (
-        <button onClick={onRemove} className="absolute right-2.5 top-2.5 z-10 rounded-md p-1.5 text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">
-          <Trash2 className="h-4 w-4" />
-        </button>
-      )}
-      <div className="p-3">
-        <div ref={anchorRef} className="flex gap-2 pr-8">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-            <Input
-              className="pl-9"
-              placeholder="Search part no. or name"
-              value={row.query}
-              onChange={(e) => {
-                row.setQuery(e.target.value);
-                row.setOpen(true);
-                onUpdate({ partNo: e.target.value });
-              }}
-              onFocus={() => row.setOpen(true)}
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => row.setOpen((v) => !v)}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-brand-200 bg-brand-50 text-brand-600 hover:bg-brand-100 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-400"
-            aria-label="Browse stock"
-          >
-            <PackageSearch className="h-4 w-4" />
+    <div className={cn("rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-navy-700 dark:bg-navy-900", !line.included && "opacity-60")}>
+      <div className="flex items-start gap-2.5">
+        <input
+          type="checkbox"
+          checked={line.included}
+          onChange={(e) => onUpdate({ included: e.target.checked })}
+          className="mt-1.5 h-5 w-5 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-navy-600"
+          aria-label={line.included ? "Exclude this part from the sale" : "Include this part in the sale"}
+        />
+
+        <div ref={anchorRef} className="min-w-0 flex-1">
+          {line.inventoryId ? (
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-slate-900 dark:text-slate-100" title={line.partNo}>
+                  {line.partNo}
+                </p>
+                <p className="truncate text-xs text-slate-500 dark:text-slate-400" title={line.description}>
+                  {line.description}
+                </p>
+                <span className="mt-1 inline-block rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-semibold text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
+                  {line.availableQty} {line.unit}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  row.setQuery("");
+                  row.setOpen(true);
+                }}
+                className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-navy-800"
+                aria-label="Change part"
+              >
+                <Search className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+              <Input
+                className="pl-9"
+                placeholder="Search part no. or name"
+                value={row.query}
+                onChange={(e) => {
+                  row.setQuery(e.target.value);
+                  row.setOpen(true);
+                  onUpdate({ partNo: e.target.value });
+                }}
+                onFocus={() => row.setOpen(true)}
+              />
+            </div>
+          )}
+          <PartSearchDropdown anchorRef={anchorRef} open={row.open} onClose={() => row.setOpen(false)} results={row.results?.items} onSelect={(r) => row.applyMatch(r, true)} />
+        </div>
+
+        {showRemove && (
+          <button onClick={onRemove} className="shrink-0 rounded-md p-1.5 text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">
+            <Trash2 className="h-4 w-4" />
           </button>
-        </div>
-        <PartSearchDropdown anchorRef={anchorRef} open={row.open} onClose={() => row.setOpen(false)} results={row.results?.items} onSelect={(r) => row.applyMatch(r, true)} />
-
-        {line.inventoryId ? (
-          <div className="mt-2.5 flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100" title={line.description}>
-                {line.description}
-              </p>
-              <p className="truncate text-xs text-slate-500 dark:text-slate-400" title={line.partNo}>
-                {line.partNo}
-              </p>
-              <CategoryBadge category={line.category} className="mt-1" />
-            </div>
-          </div>
-        ) : (
-          <div className="mt-2.5 flex items-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2.5 text-xs text-slate-400 dark:border-navy-700 dark:text-slate-500">
-            <Info className="h-3.5 w-3.5 shrink-0" />
-            Pick a part to see description, category &amp; stock
-          </div>
         )}
-
-        <div className="mt-2.5 grid grid-cols-2 gap-3">
-          <div>
-            <Label className="text-xs">Quantity *</Label>
-            <Input
-              className={overStock ? "border-red-400 dark:border-red-500/60" : ""}
-              type="number"
-              inputMode={unitAllowsDecimalQuantity(line.unit) ? "decimal" : "numeric"}
-              step={unitAllowsDecimalQuantity(line.unit) ? 0.001 : 1}
-              min={unitAllowsDecimalQuantity(line.unit) ? 0.001 : 1}
-              placeholder="0"
-              value={line.quantity}
-              onChange={(e) => onUpdate({ quantity: e.target.value === "" ? "" : Number(e.target.value) })}
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Selling price *</Label>
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 dark:text-slate-500">₹</span>
-              <Input
-                className={cn("pl-7", (priceMissing || priceNegative) && "border-red-400 dark:border-red-500/60")}
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step={0.01}
-                placeholder="0.00"
-                value={line.sellingPrice}
-                onChange={(e) => {
-                  const sellingPrice = e.target.value === "" ? "" : Number(e.target.value);
-                  if (sellingPrice === "") return onUpdate({ sellingPrice: "" });
-                  const mrp = line.mrp === "" ? 0 : line.mrp;
-                  onUpdate({ sellingPrice, discountPercent: discountFromPrice(mrp, sellingPrice) });
-                }}
-              />
-            </div>
-          </div>
-        </div>
-        <div className="mt-2.5 grid grid-cols-2 gap-3">
-          <div>
-            <Label className="text-xs">MRP</Label>
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 dark:text-slate-500">₹</span>
-              <Input
-                className="pl-7"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step={0.01}
-                placeholder="Auto"
-                value={line.mrp}
-                onChange={(e) => {
-                  const mrp = e.target.value === "" ? "" : Number(e.target.value);
-                  if (mrp === "") return onUpdate({ mrp: "" });
-                  const discount = line.discountPercent === "" ? 0 : line.discountPercent;
-                  onUpdate({ mrp, sellingPrice: priceFromDiscount(mrp, discount) });
-                }}
-              />
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs">Discount (opt.)</Label>
-            <div className="relative">
-              <Input
-                className="pr-7"
-                type="number"
-                inputMode="decimal"
-                step={0.01}
-                placeholder="0"
-                value={line.discountPercent}
-                onChange={(e) => {
-                  const mrp = line.mrp === "" ? 0 : line.mrp;
-                  const discountPercent = e.target.value === "" ? "" : Number(e.target.value);
-                  if (discountPercent === "") return onUpdate({ discountPercent: "", sellingPrice: mrp });
-                  onUpdate({ discountPercent, sellingPrice: priceFromDiscount(mrp, discountPercent) });
-                }}
-              />
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 dark:text-slate-500">%</span>
-            </div>
-          </div>
-        </div>
-        {qtyMissing && <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-400">Quantity is required.</p>}
-        {priceMissing && <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-400">Selling price is required.</p>}
-        {priceNegative && <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">Selling price can't be negative — lower the discount %.</p>}
-        {overStock && <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">Only {line.availableQty} {line.unit} available.</p>}
       </div>
 
       {line.inventoryId && (
-        <div className="border-t border-slate-100 bg-slate-50/60 px-3 py-2.5 dark:border-navy-800 dark:bg-navy-800/40">
-          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-            <span>Subtotal {formatCurrency(lineSubtotal)}</span>
-            <span>Disc − {formatCurrency(discountPerUnit * qtyNum)}</span>
-            <span>Tax {line.taxPercent}% {formatCurrency(lineTax)}</span>
+        <div className="mt-3 flex flex-wrap gap-2.5 border-t border-slate-100 pt-3 dark:border-navy-800">
+          <div className="w-[4.75rem]">
+            <Label className="text-[11px]">Qty</Label>
+            <div className={cn("flex h-8 items-center overflow-hidden rounded-lg border", overStock ? "border-red-400 dark:border-red-500/60" : "border-slate-300 dark:border-navy-600")}>
+              <button type="button" onClick={() => stepQuantity(-1)} className="flex h-full w-5 shrink-0 items-center justify-center text-slate-500 dark:text-slate-400">
+                <Minus className="h-3 w-3" />
+              </button>
+              <input
+                type="number"
+                inputMode={unitAllowsDecimalQuantity(line.unit) ? "decimal" : "numeric"}
+                step={unitAllowsDecimalQuantity(line.unit) ? 0.001 : 1}
+                min={unitAllowsDecimalQuantity(line.unit) ? 0.001 : 1}
+                value={line.quantity}
+                onChange={(e) => onUpdate({ quantity: e.target.value === "" ? "" : Number(e.target.value) })}
+                className="h-full w-full min-w-0 border-0 px-0 text-center text-sm text-slate-900 focus:outline-none focus:ring-0 dark:text-slate-100"
+              />
+              <button type="button" onClick={() => stepQuantity(1)} className="flex h-full w-5 shrink-0 items-center justify-center text-slate-500 dark:text-slate-400">
+                <Plus className="h-3 w-3" />
+              </button>
+            </div>
           </div>
-          <div className="mt-1 flex items-center justify-between">
-            <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Line Total</span>
-            <span className="text-base font-bold text-brand-600 dark:text-brand-400">{formatCurrency(lineGrandTotal)}</span>
+          <div className="w-[5.25rem]">
+            <Label className="text-[11px]">MRP (₹)</Label>
+            <Input
+              className="h-8 px-2 text-sm"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step={0.01}
+              placeholder="Auto"
+              value={line.mrp}
+              onChange={(e) => {
+                const mrp = e.target.value === "" ? "" : Number(e.target.value);
+                if (mrp === "") return onUpdate({ mrp: "" });
+                const discount = line.discountPercent === "" ? 0 : line.discountPercent;
+                onUpdate({ mrp, sellingPrice: priceFromDiscount(mrp, discount) });
+              }}
+            />
+          </div>
+          <div className="w-[5.25rem]">
+            <Label className="text-[11px]">SP (₹) *</Label>
+            <Input
+              className={cn("h-8 px-2 text-sm", (priceMissing || priceNegative) && "border-red-400 dark:border-red-500/60")}
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step={0.01}
+              placeholder="0.00"
+              value={line.sellingPrice}
+              onChange={(e) => {
+                const sellingPrice = e.target.value === "" ? "" : Number(e.target.value);
+                if (sellingPrice === "") return onUpdate({ sellingPrice: "" });
+                const mrp = line.mrp === "" ? 0 : line.mrp;
+                onUpdate({ sellingPrice, discountPercent: discountFromPrice(mrp, sellingPrice) });
+              }}
+            />
+          </div>
+          <div className="w-[5.25rem]">
+            <Label className="text-[11px]">Disc (₹)</Label>
+            <Input
+              className="h-8 px-2 text-sm"
+              type="number"
+              inputMode="decimal"
+              step={0.01}
+              placeholder="0.00"
+              value={discountAmount}
+              onChange={(e) => {
+                const amount = e.target.value === "" ? "" : Number(e.target.value);
+                if (amount === "") return onUpdate({ discountPercent: "", sellingPrice: mrpNum });
+                onUpdate({ discountPercent: discountFromPrice(mrpNum, mrpNum - amount), sellingPrice: Math.round((mrpNum - amount) * 100) / 100 });
+              }}
+            />
           </div>
         </div>
       )}
+      {qtyMissing && <p className="mt-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">Quantity is required.</p>}
+      {priceMissing && <p className="mt-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">Selling price is required.</p>}
+      {priceNegative && <p className="mt-1.5 text-[11px] font-medium text-red-600 dark:text-red-400">Selling price can't be negative.</p>}
+      {overStock && <p className="mt-1.5 text-[11px] font-medium text-red-600 dark:text-red-400">Only {line.availableQty} {line.unit} available.</p>}
     </div>
   );
 }
@@ -1068,9 +1063,9 @@ export function SellPartPage() {
                   </div>
                   <p className="text-base font-bold text-slate-900 dark:text-slate-100">Order Summary</p>
                 </div>
-                <div className="flex flex-wrap items-stretch gap-4">
+                <div className="grid grid-cols-3 items-stretch gap-3 sm:flex sm:flex-wrap sm:gap-4">
                   <div>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">Subtotal (₹) {itemCount > 0 && <span className="text-slate-400 dark:text-slate-500">· {itemCount} item{itemCount === 1 ? "" : "s"}</span>}</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Subtotal (₹) {itemCount > 0 && <span className="hidden text-slate-400 dark:text-slate-500 sm:inline">· {itemCount} item{itemCount === 1 ? "" : "s"}</span>}</p>
                     <p className="font-semibold text-slate-800 dark:text-slate-200">{formatCurrency(subtotal)}</p>
                   </div>
                   <div>
@@ -1081,7 +1076,7 @@ export function SellPartPage() {
                     <p className="text-sm text-slate-500 dark:text-slate-400">Tax (₹)</p>
                     <p className="font-semibold text-slate-800 dark:text-slate-200">{formatCurrency(tax)}</p>
                   </div>
-                  <div className="ml-auto flex items-center rounded-xl bg-brand-50 px-5 py-2.5 dark:bg-brand-500/10">
+                  <div className="col-span-3 flex items-center rounded-xl bg-brand-50 px-5 py-2.5 dark:bg-brand-500/10 sm:col-span-1 sm:ml-auto">
                     <div>
                       <p className="text-sm text-brand-600 dark:text-brand-400">Grand Total (₹)</p>
                       <p className="text-xl font-bold text-brand-700 dark:text-brand-400">{formatCurrency(grandTotal)}</p>
@@ -1095,7 +1090,7 @@ export function SellPartPage() {
               <CardContent className="space-y-3 p-4">
                 <SectionHeader step={2} title="Customer Details" />
 
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                  <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
                     <div>
                       <Label>Customer Name *</Label>
                       <div className="relative">
@@ -1140,8 +1135,8 @@ export function SellPartPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-                    <div>
+                  <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                    <div className="col-span-2 lg:col-span-1">
                       <Label>Address (Optional)</Label>
                       <div className="relative">
                         <MapPin className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400 dark:text-slate-500" />
