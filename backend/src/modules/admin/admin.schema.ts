@@ -21,6 +21,10 @@ export const createTenantSchema = z.object({
   adminLastName: z.string().min(1).max(100),
 });
 
+export const changeTenantPlanSchema = z.object({
+  planCode: z.string().min(1, "Plan is required"),
+});
+
 export const updateTenantSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   contactPerson: z.string().max(150).optional(),

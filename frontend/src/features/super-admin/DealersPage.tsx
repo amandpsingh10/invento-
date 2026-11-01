@@ -39,6 +39,7 @@ const emptyEditForm = {
   phone: "",
   address: "",
   status: "TRIAL",
+  planCode: "",
 };
 
 export function DealersPage() {
@@ -95,13 +96,14 @@ export function DealersPage() {
       phone: t.phone ?? "",
       address: t.address ?? "",
       status: t.status,
+      planCode: t.planCode ?? "",
     });
     setEditError(null);
   };
 
   const update = useMutation({
     mutationFn: async () => {
-      const { name, contactPerson, email, phone, address, status } = editForm;
+      const { name, contactPerson, email, phone, address, status, planCode } = editForm;
       const payload = {
         name,
         contactPerson: contactPerson.trim() || undefined,
@@ -110,7 +112,12 @@ export function DealersPage() {
         address: address.trim() || undefined,
         status,
       };
-      return apiClient.put(`/admin/tenants/${editTenant!.id}`, payload);
+      await apiClient.put(`/admin/tenants/${editTenant!.id}`, payload);
+      // Separate endpoint — plan changes are their own audited action, not
+      // part of the plain profile-fields update above.
+      if (planCode && planCode !== editTenant!.planCode) {
+        await apiClient.put(`/admin/tenants/${editTenant!.id}/plan`, { planCode });
+      }
     },
     onSuccess: () => {
       push({ tone: "success", title: "Dealer updated" });
@@ -327,6 +334,21 @@ export function DealersPage() {
                 <option value="ACTIVE">Active</option>
                 <option value="SUSPENDED">Suspended</option>
                 <option value="CANCELLED">Cancelled</option>
+              </Select>
+            </div>
+            <div>
+              <Label>Plan</Label>
+              <Select value={editForm.planCode} onChange={(e) => setEditForm({ ...editForm, planCode: e.target.value })}>
+                {!assignablePlans.some((p) => p.code === editForm.planCode) && (
+                  <option value={editForm.planCode}>{editTenant?.plan ?? "—"}</option>
+                )}
+                {assignablePlans.map((p) => (
+                  <option key={p.code} value={p.code}>
+                    {p.name}
+                    {p.billingCycle === "ANNUAL" ? " (Annual)" : ""}
+                    {p.isCustom ? " — Custom" : ""}
+                  </option>
+                ))}
               </Select>
             </div>
           </div>

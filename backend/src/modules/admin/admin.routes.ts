@@ -2,7 +2,7 @@ import { Router } from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { requireAuth } from "../../middleware/auth.middleware";
 import { requireRole, ROLE_GROUPS } from "../../middleware/rbac.middleware";
-import { createTenantSchema, updateTenantSchema, updatePlanSchema, createPlanSchema, updateMenuAccessSchema } from "./admin.schema";
+import { createTenantSchema, updateTenantSchema, changeTenantPlanSchema, updatePlanSchema, createPlanSchema, updateMenuAccessSchema } from "./admin.schema";
 import * as adminService from "./admin.service";
 import { recordAudit } from "../audit/audit.service";
 
@@ -78,6 +78,24 @@ router.put(
     const tenant = await adminService.updateTenant(req.params.id, input);
     await recordAudit({ req, tenantId: null, userId: req.user!.id, action: "TENANT_UPDATED", entityType: "Tenant", entityId: tenant.id, newValue: input });
     res.json({ success: true, data: tenant });
+  })
+);
+
+router.put(
+  "/tenants/:id/plan",
+  asyncHandler(async (req, res) => {
+    const input = changeTenantPlanSchema.parse(req.body);
+    const result = await adminService.changeTenantPlan(req.params.id, input.planCode);
+    await recordAudit({
+      req,
+      tenantId: null,
+      userId: req.user!.id,
+      action: "TENANT_PLAN_CHANGED",
+      entityType: "Tenant",
+      entityId: req.params.id,
+      newValue: { planCode: input.planCode },
+    });
+    res.json({ success: true, data: result });
   })
 );
 

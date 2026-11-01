@@ -486,6 +486,7 @@ export interface DealerTenant {
   status: string;
   trialEndsAt: string | null;
   plan: string | null;
+  planCode: string | null;
   subscriptionStatus: string | null;
   userCount: number;
   partCount: number;

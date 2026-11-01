@@ -23,6 +23,7 @@ export async function listTenants() {
     status: t.status,
     trialEndsAt: t.trialEndsAt,
     plan: t.subscriptions[0]?.plan.name ?? null,
+    planCode: t.subscriptions[0]?.plan.code ?? null,
     subscriptionStatus: t.subscriptions[0]?.status ?? null,
     userCount: t._count.users,
     partCount: t._count.parts,
@@ -93,6 +94,37 @@ export async function updateTenant(id: string, input: z.infer<typeof updateTenan
 export async function setTenantStatus(id: string, status: "ACTIVE" | "SUSPENDED" | "CANCELLED") {
   await getTenant(id);
   return prisma.tenant.update({ where: { id }, data: { status } });
+}
+
+/**
+ * Super Admin moving a dealer directly onto a different plan (including a
+ * custom one, unlike the dealer's own self-service picker in
+ * tenant.service.ts). Just creates a new ACTIVE subscription row rather
+ * than editing the old one — "current plan" is always whichever
+ * subscription was created most recently (see listTenants/getTenant above),
+ * so this keeps a full history without needing to touch past rows, same as
+ * tenant.service.ts's selectPlan.
+ */
+export async function changeTenantPlan(tenantId: string, planCode: string) {
+  const tenant = await getTenant(tenantId);
+  const plan = await prisma.plan.findUnique({ where: { code: planCode } });
+  if (!plan || !plan.isActive) throw ApiError.badRequest("Invalid or inactive plan");
+
+  await prisma.subscription.create({ data: { tenantId, planId: plan.id, status: "ACTIVE" } });
+  // A dealer moved onto a real plan is no longer on trial — mirrors what
+  // the dealer's own self-service plan picker does on selectPlan.
+  const updated = tenant.status === "TRIAL" ? await prisma.tenant.update({ where: { id: tenantId }, data: { status: "ACTIVE" } }) : tenant;
+
+  await prisma.notification.create({
+    data: {
+      tenantId,
+      type: "SYSTEM",
+      title: "Plan changed",
+      message: `Your dealership has been moved to the ${plan.name} plan.`,
+    },
+  });
+
+  return { tenant: updated, plan };
 }
 
 export async function listTenantUsers(tenantId: string) {
