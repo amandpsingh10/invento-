@@ -20,6 +20,8 @@ import {
   Plus,
   Minus,
   ClipboardList,
+  ArrowRight,
+  ArrowLeft,
 } from "lucide-react";
 import { apiClient, getApiErrorMessage } from "@/lib/apiClient";
 import type { InventoryRow, PagedResult, Invoice, CustomerInput, LocationRef, PartUnit } from "@/types";
@@ -523,6 +525,9 @@ function CartRowMobile({
   // Read directly off mrp - sellingPrice, same fix as the desktop row —
   // see its comment for why this can't be derived from discountPercent.
   const discountAmount = line.mrp !== "" && line.sellingPrice !== "" ? Math.round((mrpNum - priceNum) * 100) / 100 : "";
+  // Blank, not "0", when there's no discount yet — a zero sitting in the
+  // field by default read as if it were already filled in.
+  const discountDisplay = discountAmount === "" || discountAmount === 0 ? "" : discountAmount;
 
   function stepQuantity(direction: 1 | -1) {
     const step = unitAllowsDecimalQuantity(line.unit) ? 0.001 : 1;
@@ -660,7 +665,7 @@ function CartRowMobile({
               inputMode="decimal"
               step={0.01}
               placeholder="0.00"
-              value={discountAmount}
+              value={discountDisplay}
               onChange={(e) => {
                 const amount = e.target.value === "" ? "" : Number(e.target.value);
                 if (amount === "") return onUpdate({ discountPercent: "", sellingPrice: mrpNum });
@@ -683,6 +688,10 @@ export function SellPartPage() {
   const location = useLocation();
   const prefill = location.state as SellPartPrefillState | null;
   const [step, setStep] = useState<Step>("cart");
+  // Below lg, Part Details and Order Summary/Customer Details are two
+  // separate screens instead of one long scroll — desktop (lg+) always
+  // shows all of it together and ignores this.
+  const [mobileStep, setMobileStep] = useState<"parts" | "customer">("parts");
   const [cart, setCart] = useState<CartLine[]>(() => [blankLine()]);
   const [customer, setCustomer] = useState<CustomerInput>(prefill?.customer ?? emptyCustomer);
   const [customerErrors, setCustomerErrors] = useState<Record<string, string>>({});
@@ -909,6 +918,12 @@ export function SellPartPage() {
     setCart([blankLine()]);
     setCustomer(emptyCustomer);
     setCustomerErrors({});
+    setMobileStep("parts");
+  }
+
+  function goToMobileStep(next: "parts" | "customer") {
+    setMobileStep(next);
+    document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   const { subtotal, tax, discount, grandTotal } = computeTotals(cart);
@@ -973,11 +988,12 @@ export function SellPartPage() {
     setCustomerErrors({});
     setCreatedInvoice(null);
     setStep("cart");
+    setMobileStep("parts");
     navigate("/sell/new", { replace: true });
   }
 
   return (
-    <div className="pb-28 sm:pb-0">
+    <div className={cn(mobileStep === "customer" ? "pb-28" : "pb-4", "lg:pb-0")}>
       <PageHeader
         title="Sell Part"
         subtitle="Search and select parts, add customer details and complete the sale."
@@ -989,7 +1005,7 @@ export function SellPartPage() {
       {step === "cart" && (
         <>
           <div className="space-y-3">
-            <Card>
+            <Card className={cn(mobileStep !== "parts" && "hidden lg:block")}>
               <CardContent className="p-4">
                 <SectionHeader
                   step={1}
@@ -1052,11 +1068,18 @@ export function SellPartPage() {
                     />
                   ))}
                 </div>
+
+                <Button type="button" className="mt-4 w-full lg:hidden" disabled={cartHasIssue} onClick={() => goToMobileStep("customer")}>
+                  Next: Customer Details <ArrowRight className="h-4 w-4" />
+                </Button>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className={cn(mobileStep !== "customer" && "hidden lg:block")}>
               <CardContent className="p-4">
+                <button type="button" onClick={() => goToMobileStep("parts")} className="mb-3 flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 lg:hidden">
+                  <ArrowLeft className="h-4 w-4" /> Back to Parts
+                </button>
                 <div className="mb-3 flex items-center gap-2.5">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
                     <ClipboardList className="h-4.5 w-4.5" />
@@ -1086,7 +1109,7 @@ export function SellPartPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className={cn(mobileStep !== "customer" && "hidden lg:block")}>
               <CardContent className="space-y-3 p-4">
                 <SectionHeader step={2} title="Customer Details" />
 
@@ -1227,8 +1250,8 @@ export function SellPartPage() {
               </Card>
             </div>
 
-          {/* Desktop/tablet action bar — natural page flow beneath everything above */}
-          <div className="hidden items-center justify-end gap-3 pt-4 sm:flex">
+          {/* Desktop action bar — natural page flow beneath everything above; below lg, the sticky bar at the bottom of the screen takes over */}
+          <div className="hidden items-center justify-end gap-3 pt-4 lg:flex">
             <Button variant="outline" onClick={handleClear}>
               Clear
             </Button>
@@ -1273,9 +1296,11 @@ export function SellPartPage() {
       )}
 
       {/* Sticky mobile action bar — mirrors the desktop bar above so the
-          primary actions are always one thumb-reach away. */}
-      {step === "cart" && (
-        <div className="fixed inset-x-0 bottom-16 z-20 flex gap-2 border-t border-slate-200 bg-white p-3 sm:hidden dark:border-navy-700 dark:bg-navy-900">
+          primary actions are always one thumb-reach away. Only shown on
+          the Customer Details step; the Parts step has its own "Next"
+          button at the bottom of that card instead. */}
+      {step === "cart" && mobileStep === "customer" && (
+        <div className="fixed inset-x-0 bottom-16 z-20 flex gap-2 border-t border-slate-200 bg-white p-3 lg:hidden dark:border-navy-700 dark:bg-navy-900">
           <Button variant="outline" className="flex-1" onClick={handleClear}>
             Clear
           </Button>
