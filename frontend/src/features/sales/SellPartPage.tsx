@@ -43,6 +43,10 @@ import { scanBarcode } from "@/lib/barcodeScanner";
 
 interface CartLine {
   key: string;
+  // Unchecked via the row's checkbox — kept in the cart (so typed data
+  // isn't lost) but left out of totals, validation and the sale itself.
+  // Lets a dealer pause a part without deleting the row.
+  included: boolean;
   inventoryId: string | null;
   partNo: string;
   description: string;
@@ -81,6 +85,7 @@ function newRowKey(): string {
 function blankLine(): CartLine {
   return {
     key: newRowKey(),
+    included: true,
     inventoryId: null,
     partNo: "",
     description: "",
@@ -127,6 +132,7 @@ function computeTotals(cart: CartLine[]) {
   let tax = 0;
   let discount = 0;
   for (const line of cart) {
+    if (!line.included) continue;
     const qty = line.quantity === "" ? 0 : line.quantity;
     const price = line.sellingPrice === "" ? 0 : line.sellingPrice;
     const mrp = line.mrp === "" ? 0 : line.mrp;
@@ -313,24 +319,24 @@ function PartSearchDropdown({
 }
 
 /**
- * Full-width "Part Details" card for one cart line, shown on desktop/web
- * only (see CartRowMobile for the app's own, unrelated card design — the
- * user asked for this reference to apply to the web view specifically).
- * Store/Bin/Rack aren't shown here: the reference has no location fields at
- * all, since the search-result picker already commits to a specific
- * store/bin/rack when a part is matched (see useCartRow.applyMatch) —
- * there's nothing left to choose afterward on this screen.
+ * One dense table row per cart line, shown on desktop/web only (see
+ * CartRowMobile for the separate mobile card design). Store/Bin/Rack
+ * aren't shown here: the search-result picker already commits to a
+ * specific store/bin/rack when a part is matched (see
+ * useCartRow.applyMatch) — there's nothing left to choose afterward.
+ * The leading checkbox toggles CartLine.included: unchecked keeps the row
+ * (and whatever the dealer already typed into it) but drops it from
+ * totals, validation and the sale itself — a way to pause a part without
+ * losing or deleting it.
  */
 function CartRowDesktop({
   line,
-  index,
   showRemove,
   otherInventoryIds,
   onUpdate,
   onRemove,
 }: {
   line: CartLine;
-  index: number;
   showRemove: boolean;
   otherInventoryIds: Set<string>;
   onUpdate: (patch: Partial<CartLine>) => void;
@@ -341,20 +347,12 @@ function CartRowDesktop({
   const qtyMissing = line.quantity === "";
   const priceMissing = line.sellingPrice === "";
   const overStock = !qtyMissing && Number(line.quantity) > line.availableQty;
-  const qtyNum = line.quantity === "" ? 0 : line.quantity;
-  const priceNum = line.sellingPrice === "" ? 0 : line.sellingPrice;
   const mrpNum = line.mrp === "" ? 0 : line.mrp;
-  // sellingPrice is tax-inclusive (defaults to the part's MRP) — Grand
-  // Total is fixed at price × qty, and Subtotal/Tax are extracted from
-  // within it rather than adding tax on top (see computeTotals above).
-  const lineGrandTotal = Math.round(priceNum * qtyNum * 100) / 100;
-  const { taxableValue: lineSubtotal, taxAmount: lineTax } = splitTaxInclusiveAmount(lineGrandTotal, line.taxPercent);
-  // Discount is shown/edited in ₹ here (vs. Discount % on mobile). Read
-  // directly off mrp - sellingPrice (both stored exactly, to the paisa) —
-  // not derived back from the separately-rounded discountPercent, which
-  // round-trips a small drift into the displayed amount and made it look
-  // like typed digits weren't taking (e.g. typing 6.68 would redisplay as
-  // 6.6 after the percent round-trip, even though sellingPrice was correct).
+  const priceNum = line.sellingPrice === "" ? 0 : line.sellingPrice;
+  // Read directly off mrp - sellingPrice (both stored exactly, to the
+  // paisa) — not derived back from the separately-rounded discountPercent,
+  // which round-trips a small drift into the displayed amount (typing 6.68
+  // would redisplay as 6.6 even though sellingPrice was correct).
   const discountAmount = line.mrp !== "" && line.sellingPrice !== "" ? Math.round((mrpNum - priceNum) * 100) / 100 : "";
   const categoryCode = line.category as PartCategoryCode;
 
@@ -366,211 +364,141 @@ function CartRowDesktop({
   }
 
   return (
-    <div className="relative rounded-xl border border-slate-200 bg-white p-4 dark:border-navy-700 dark:bg-navy-900">
-      {showRemove && (
-        <button onClick={onRemove} className="absolute right-3.5 top-3.5 rounded-md p-1.5 text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">
-          <Trash2 className="h-4 w-4" />
-        </button>
-      )}
-      {index > 0 && <p className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Part {index + 1}</p>}
-
-      <div className={cn("grid grid-cols-1 gap-4 xl:grid-cols-[1fr_16rem] xl:items-start", showRemove && "pr-8")}>
-        <div>
-          <Label>Find part *</Label>
-          <div className="flex gap-2">
-            <div ref={anchorRef} className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-              <Input
-                className="h-10 pl-9"
-                placeholder="Type part no. or name..."
-                value={row.query}
-                onChange={(e) => {
-                  row.setQuery(e.target.value);
-                  row.setOpen(true);
-                  onUpdate({ partNo: e.target.value });
-                }}
-                onFocus={() => row.setOpen(true)}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => row.setOpen((v) => !v)}
-              className="flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 px-3 text-sm font-semibold text-brand-600 hover:bg-brand-50 dark:border-navy-600 dark:text-brand-400 dark:hover:bg-brand-500/10"
-            >
-              <Plus className="h-4 w-4" /> Browse stock
-            </button>
-          </div>
-          <PartSearchDropdown
-            anchorRef={anchorRef}
-            open={row.open}
-            onClose={() => row.setOpen(false)}
-            results={row.results?.items}
-            onSelect={(r) => row.applyMatch(r, true)}
+    <tr className={cn(!line.included && "opacity-50")}>
+      <td className="px-2.5 py-2 align-top">
+        <input
+          type="checkbox"
+          checked={line.included}
+          onChange={(e) => onUpdate({ included: e.target.checked })}
+          className="mt-1.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-navy-600"
+          aria-label={line.included ? "Exclude this part from the sale" : "Include this part in the sale"}
+        />
+      </td>
+      <td className="min-w-[11rem] px-2.5 py-2 align-top">
+        <div ref={anchorRef} className="relative">
+          <Input
+            className="h-9 pr-8"
+            placeholder="Part No. / Description"
+            value={row.query}
+            onChange={(e) => {
+              row.setQuery(e.target.value);
+              row.setOpen(true);
+              onUpdate({ partNo: e.target.value });
+            }}
+            onFocus={() => row.setOpen(true)}
           />
-
-          {/* Preview strip — dashed while nothing's matched yet, filled in once a part is */}
-          <div
-            className={cn(
-              "mt-2.5 grid grid-cols-3 gap-3 rounded-lg border px-3.5 py-2.5",
-              line.inventoryId ? "border-slate-200 bg-slate-50 dark:border-navy-700 dark:bg-navy-800" : "border-dashed border-slate-300 dark:border-navy-700"
-            )}
+          <button
+            type="button"
+            onClick={() => row.setOpen((v) => !v)}
+            className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-navy-800"
+            aria-label="Browse stock"
           >
-            <div className="min-w-0">
-              <p className="text-xs text-slate-400 dark:text-slate-500">Description</p>
-              <p
-                className={cn("truncate text-sm", line.description ? "font-medium text-slate-800 dark:text-slate-200" : "text-slate-400 dark:text-slate-500")}
-                title={line.description || undefined}
-              >
-                {line.description || "Select a part to fill this in"}
-              </p>
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-slate-400 dark:text-slate-500">Category</p>
-              <p className="truncate text-sm text-slate-700 dark:text-slate-300">
-                {line.category ? `${categoryCode} — ${PART_CATEGORY_LABELS[categoryCode] ?? line.category}` : "—"}
-              </p>
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-slate-400 dark:text-slate-500">In stock</p>
-              <p className="truncate text-sm text-slate-700 dark:text-slate-300">{line.inventoryId ? `${line.availableQty} ${line.unit}` : "—"}</p>
-            </div>
-          </div>
-
-          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div>
-              <Label>Quantity *</Label>
-              <div className={cn("flex h-9 items-center overflow-hidden rounded-lg border", overStock ? "border-red-400 dark:border-red-500/60" : "border-slate-300 dark:border-navy-600")}>
-                <button
-                  type="button"
-                  onClick={() => stepQuantity(-1)}
-                  className="flex h-full w-9 shrink-0 items-center justify-center text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-navy-800"
-                >
-                  <Minus className="h-3.5 w-3.5" />
-                </button>
-                <input
-                  type="number"
-                  inputMode={unitAllowsDecimalQuantity(line.unit) ? "decimal" : "numeric"}
-                  step={unitAllowsDecimalQuantity(line.unit) ? 0.001 : 1}
-                  min={unitAllowsDecimalQuantity(line.unit) ? 0.001 : 1}
-                  value={line.quantity}
-                  onChange={(e) => onUpdate({ quantity: e.target.value === "" ? "" : Number(e.target.value) })}
-                  className="h-full w-full min-w-0 border-0 text-center text-sm text-slate-900 focus:outline-none focus:ring-0 dark:text-slate-100"
-                />
-                <button
-                  type="button"
-                  onClick={() => stepQuantity(1)}
-                  className="flex h-full w-9 shrink-0 items-center justify-center text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-navy-800"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
-                <span className="flex h-full shrink-0 items-center border-l border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-500 dark:border-navy-700 dark:bg-navy-800 dark:text-slate-400">
-                  {line.unit}
-                </span>
-              </div>
-              {qtyMissing ? (
-                <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">Quantity is required.</p>
-              ) : overStock ? (
-                <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">Only {line.availableQty} available.</p>
-              ) : (
-                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Can't exceed available stock</p>
-              )}
-            </div>
-            <div>
-              <Label>MRP</Label>
-              <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 dark:text-slate-500">₹</span>
-                <Input
-                  className="pl-7"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step={0.01}
-                  placeholder="Auto-filled"
-                  value={line.mrp}
-                  onChange={(e) => {
-                    const mrp = e.target.value === "" ? "" : Number(e.target.value);
-                    if (mrp === "") return onUpdate({ mrp: "" });
-                    const discount = line.discountPercent === "" ? 0 : line.discountPercent;
-                    onUpdate({ mrp, sellingPrice: priceFromDiscount(mrp, discount) });
-                  }}
-                />
-              </div>
-              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">From price list</p>
-            </div>
-            <div>
-              <Label>Selling price *</Label>
-              <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 dark:text-slate-500">₹</span>
-                <Input
-                  className={cn("pl-7", priceMissing && "border-red-400 dark:border-red-500/60")}
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step={0.01}
-                  placeholder="0.00"
-                  value={line.sellingPrice}
-                  onChange={(e) => {
-                    const sellingPrice = e.target.value === "" ? "" : Number(e.target.value);
-                    if (sellingPrice === "") return onUpdate({ sellingPrice: "" });
-                    const mrp = line.mrp === "" ? 0 : line.mrp;
-                    onUpdate({ sellingPrice, discountPercent: discountFromPrice(mrp, sellingPrice) });
-                  }}
-                />
-              </div>
-              {priceMissing ? (
-                <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">Selling price is required.</p>
-              ) : (
-                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Per unit, before discount</p>
-              )}
-            </div>
-            <div>
-              <Label>Discount</Label>
-              <div className="relative">
-                <Input
-                  className="pr-7"
-                  type="number"
-                  inputMode="decimal"
-                  step={0.01}
-                  placeholder="0"
-                  value={line.discountPercent}
-                  onChange={(e) => {
-                    const discountPercent = e.target.value === "" ? "" : Number(e.target.value);
-                    if (discountPercent === "") return onUpdate({ discountPercent: "", sellingPrice: mrpNum });
-                    onUpdate({ discountPercent, sellingPrice: priceFromDiscount(mrpNum, discountPercent) });
-                  }}
-                />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 dark:text-slate-500">%</span>
-              </div>
-              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                {discountAmount !== "" && discountAmount > 0 ? `${formatCurrency(discountAmount)} off MRP` : "Optional"}
-              </p>
-            </div>
-          </div>
+            <Search className="h-3.5 w-3.5" />
+          </button>
         </div>
-
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 dark:border-navy-700 dark:bg-navy-800">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Summary</p>
-          <div className="mt-2.5 space-y-1.5 text-sm">
-            <div className="flex justify-between text-slate-500 dark:text-slate-400">
-              <span>Subtotal</span>
-              <span>{formatCurrency(lineSubtotal)}</span>
-            </div>
-            <div className="flex justify-between text-slate-500 dark:text-slate-400">
-              <span>Discount</span>
-              <span>{discountAmount !== "" && discountAmount > 0 ? `− ${formatCurrency(discountAmount * qtyNum)}` : formatCurrency(0)}</span>
-            </div>
-            <div className="flex justify-between text-slate-500 dark:text-slate-400">
-              <span>Tax ({line.taxPercent}%)</span>
-              <span>{formatCurrency(lineTax)}</span>
-            </div>
-          </div>
-          <div className="mt-2 flex justify-between border-t border-slate-200 pt-2 text-base font-bold text-slate-900 dark:border-navy-700 dark:text-slate-100">
-            <span>Grand Total</span>
-            <span className="text-brand-600 dark:text-brand-400">{formatCurrency(lineGrandTotal)}</span>
-          </div>
+        <PartSearchDropdown
+          anchorRef={anchorRef}
+          open={row.open}
+          onClose={() => row.setOpen(false)}
+          results={row.results?.items}
+          onSelect={(r) => row.applyMatch(r, true)}
+        />
+      </td>
+      <td className="max-w-[9rem] px-2.5 py-2 align-top">
+        <p className={cn("truncate text-sm", line.description ? "text-slate-700 dark:text-slate-300" : "text-slate-300 dark:text-slate-600")} title={line.description || undefined}>
+          {line.description || "—"}
+        </p>
+      </td>
+      <td className="max-w-[8rem] px-2.5 py-2 align-top">
+        <p className="truncate text-sm text-slate-700 dark:text-slate-300">{line.category ? PART_CATEGORY_LABELS[categoryCode] ?? line.category : "—"}</p>
+      </td>
+      <td className="px-2.5 py-2 text-right align-top">
+        <span className={cn("text-sm font-semibold", line.inventoryId ? "text-brand-600 dark:text-brand-400" : "text-slate-300 dark:text-slate-600")}>
+          {line.inventoryId ? line.availableQty : "—"}
+        </span>
+      </td>
+      <td className="px-2.5 py-2 align-top">
+        <div className={cn("flex h-9 w-[5.5rem] items-center overflow-hidden rounded-lg border", overStock ? "border-red-400 dark:border-red-500/60" : "border-slate-300 dark:border-navy-600")}>
+          <button type="button" onClick={() => stepQuantity(-1)} className="flex h-full w-6 shrink-0 items-center justify-center text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-navy-800">
+            <Minus className="h-3 w-3" />
+          </button>
+          <input
+            type="number"
+            inputMode={unitAllowsDecimalQuantity(line.unit) ? "decimal" : "numeric"}
+            step={unitAllowsDecimalQuantity(line.unit) ? 0.001 : 1}
+            min={unitAllowsDecimalQuantity(line.unit) ? 0.001 : 1}
+            value={line.quantity}
+            onChange={(e) => onUpdate({ quantity: e.target.value === "" ? "" : Number(e.target.value) })}
+            className="h-full w-full min-w-0 border-0 text-center text-sm text-slate-900 focus:outline-none focus:ring-0 dark:text-slate-100"
+          />
+          <button type="button" onClick={() => stepQuantity(1)} className="flex h-full w-6 shrink-0 items-center justify-center text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-navy-800">
+            <Plus className="h-3 w-3" />
+          </button>
         </div>
-      </div>
-    </div>
+        {qtyMissing ? (
+          <p className="mt-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">Required</p>
+        ) : (
+          overStock && <p className="mt-1 text-[11px] font-medium text-red-600 dark:text-red-400">Max {line.availableQty}</p>
+        )}
+      </td>
+      <td className="px-2.5 py-2 align-top">
+        <Input
+          className="h-9 w-24"
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step={0.01}
+          placeholder="Auto"
+          value={line.mrp}
+          onChange={(e) => {
+            const mrp = e.target.value === "" ? "" : Number(e.target.value);
+            if (mrp === "") return onUpdate({ mrp: "" });
+            const discount = line.discountPercent === "" ? 0 : line.discountPercent;
+            onUpdate({ mrp, sellingPrice: priceFromDiscount(mrp, discount) });
+          }}
+        />
+      </td>
+      <td className="px-2.5 py-2 align-top">
+        <Input
+          className={cn("h-9 w-28", priceMissing && "border-red-400 dark:border-red-500/60")}
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step={0.01}
+          placeholder="0.00"
+          value={line.sellingPrice}
+          onChange={(e) => {
+            const sellingPrice = e.target.value === "" ? "" : Number(e.target.value);
+            if (sellingPrice === "") return onUpdate({ sellingPrice: "" });
+            const mrp = line.mrp === "" ? 0 : line.mrp;
+            onUpdate({ sellingPrice, discountPercent: discountFromPrice(mrp, sellingPrice) });
+          }}
+        />
+        {priceMissing && <p className="mt-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">Required</p>}
+      </td>
+      <td className="px-2.5 py-2 align-top">
+        <Input
+          className="h-9 w-24"
+          type="number"
+          inputMode="decimal"
+          step={0.01}
+          placeholder="0.00"
+          value={discountAmount}
+          onChange={(e) => {
+            const amount = e.target.value === "" ? "" : Number(e.target.value);
+            if (amount === "") return onUpdate({ discountPercent: "", sellingPrice: mrpNum });
+            onUpdate({ discountPercent: discountFromPrice(mrpNum, mrpNum - amount), sellingPrice: Math.round((mrpNum - amount) * 100) / 100 });
+          }}
+        />
+      </td>
+      <td className="px-2.5 py-2 align-top">
+        {showRemove && (
+          <button onClick={onRemove} className="rounded-md p-1.5 text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
+      </td>
+    </tr>
   );
 }
 
@@ -923,6 +851,7 @@ export function SellPartPage() {
           const blank = prev.find((l) => !l.inventoryId);
           const newLine: CartLine = {
             key: blank?.key ?? newRowKey(),
+            included: true,
             inventoryId: r.id,
             partNo: r.partNo,
             description: r.description,
@@ -988,23 +917,26 @@ export function SellPartPage() {
   }
 
   const { subtotal, tax, discount, grandTotal } = computeTotals(cart);
-  const itemCount = cart.filter((l) => l.inventoryId).length;
-  // Every row must resolve to a real part/location with a valid quantity
-  // and price before Confirm Sale unlocks — explicit checks rather than
-  // relying on "" <= 0 coercion, since a future refactor could easily
-  // change that comparison's behavior silently.
+  const itemCount = cart.filter((l) => l.included && l.inventoryId).length;
+  // Every included row must resolve to a real part/location with a valid
+  // quantity and price before Confirm Sale unlocks — explicit checks
+  // rather than relying on "" <= 0 coercion, since a future refactor could
+  // easily change that comparison's behavior silently. An unchecked
+  // ("paused") row is skipped entirely — it's excluded from the sale, so
+  // whatever state it's in doesn't block submitting the rest.
   const cartHasIssue =
     itemCount === 0 ||
     cart.some(
       (l) =>
-        !l.inventoryId ||
-        l.quantity === "" ||
-        Number(l.quantity) <= 0 ||
-        Number(l.quantity) > l.availableQty ||
-        l.mrp === "" ||
-        Number(l.mrp) < 0 ||
-        l.sellingPrice === "" ||
-        Number(l.sellingPrice) < 0
+        l.included &&
+        (!l.inventoryId ||
+          l.quantity === "" ||
+          Number(l.quantity) <= 0 ||
+          Number(l.quantity) > l.availableQty ||
+          l.mrp === "" ||
+          Number(l.mrp) < 0 ||
+          l.sellingPrice === "" ||
+          Number(l.sellingPrice) < 0)
     );
 
   function validateCustomer(): boolean {
@@ -1019,7 +951,7 @@ export function SellPartPage() {
     mutationFn: async () =>
       apiClient.post<{ data: Invoice }>("/sales", {
         customer,
-        items: cart.filter((l) => l.inventoryId).map((l) => ({ inventoryId: l.inventoryId!, quantity: Number(l.quantity), sellingPrice: Number(l.sellingPrice) })),
+        items: cart.filter((l) => l.included && l.inventoryId).map((l) => ({ inventoryId: l.inventoryId!, quantity: Number(l.quantity), sellingPrice: Number(l.sellingPrice) })),
       }),
     onSuccess: (res) => {
       setCreatedInvoice(res.data.data);
@@ -1074,25 +1006,42 @@ export function SellPartPage() {
                         <ScanLine className="h-4 w-4" /> Scan
                       </Button>
                       <Button type="button" size="sm" onClick={addRow}>
-                        <Plus className="h-4 w-4" /> Add from Stock
+                        <Plus className="h-4 w-4" /> Add
                       </Button>
                     </div>
                   }
                 />
 
-                {/* Desktop: one full-width card per part */}
-                <div className="hidden space-y-3 lg:block">
-                  {cart.map((line, i) => (
-                    <CartRowDesktop
-                      key={line.key}
-                      line={line}
-                      index={i}
-                      showRemove={cart.length > 1}
-                      otherInventoryIds={new Set(cart.filter((l) => l.key !== line.key && l.inventoryId).map((l) => l.inventoryId!))}
-                      onUpdate={(patch) => updateRow(line.key, patch)}
-                      onRemove={() => removeRow(line.key)}
-                    />
-                  ))}
+                {/* Desktop: one dense table, one row per part */}
+                <div className="hidden overflow-x-auto thin-scroll lg:block">
+                  <table className="w-full min-w-[1080px] border-separate border-spacing-0 text-left text-sm">
+                    <thead className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                      <tr>
+                        <th className="px-2.5 py-2" />
+                        <th className="px-2.5 py-2">Part No / Description</th>
+                        <th className="px-2.5 py-2">Description</th>
+                        <th className="px-2.5 py-2">Category</th>
+                        <th className="px-2.5 py-2 text-right">Stock</th>
+                        <th className="px-2.5 py-2">Quantity *</th>
+                        <th className="px-2.5 py-2">MRP (₹)</th>
+                        <th className="px-2.5 py-2">Selling Price (₹) *</th>
+                        <th className="px-2.5 py-2">Discount (₹)</th>
+                        <th className="px-2.5 py-2" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-navy-800">
+                      {cart.map((line) => (
+                        <CartRowDesktop
+                          key={line.key}
+                          line={line}
+                          showRemove={cart.length > 1}
+                          otherInventoryIds={new Set(cart.filter((l) => l.key !== line.key && l.inventoryId).map((l) => l.inventoryId!))}
+                          onUpdate={(patch) => updateRow(line.key, patch)}
+                          onRemove={() => removeRow(line.key)}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
 
                 {/* Mobile: stacked cards */}
@@ -1119,22 +1068,24 @@ export function SellPartPage() {
                   </div>
                   <p className="text-base font-bold text-slate-900 dark:text-slate-100">Order Summary</p>
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                <div className="flex flex-wrap items-stretch gap-4">
                   <div>
-                    <p className="text-slate-500 dark:text-slate-400">Items ({itemCount}) — before tax</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Subtotal (₹) {itemCount > 0 && <span className="text-slate-400 dark:text-slate-500">· {itemCount} item{itemCount === 1 ? "" : "s"}</span>}</p>
                     <p className="font-semibold text-slate-800 dark:text-slate-200">{formatCurrency(subtotal)}</p>
                   </div>
                   <div>
-                    <p className="text-slate-500 dark:text-slate-400">Discount</p>
-                    <p className="font-semibold text-slate-800 dark:text-slate-200">{discount > 0 ? `-${formatCurrency(discount)}` : formatCurrency(0)}</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Discount (₹)</p>
+                    <p className="font-semibold text-slate-800 dark:text-slate-200">{formatCurrency(discount)}</p>
                   </div>
                   <div>
-                    <p className="text-slate-500 dark:text-slate-400">Tax</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Tax (₹)</p>
                     <p className="font-semibold text-slate-800 dark:text-slate-200">{formatCurrency(tax)}</p>
                   </div>
-                  <div>
-                    <p className="text-slate-500 dark:text-slate-400">Total Amount</p>
-                    <p className="text-lg font-bold text-brand-600 dark:text-brand-400">{formatCurrency(grandTotal)}</p>
+                  <div className="ml-auto flex items-center rounded-xl bg-brand-50 px-5 py-2.5 dark:bg-brand-500/10">
+                    <div>
+                      <p className="text-sm text-brand-600 dark:text-brand-400">Grand Total (₹)</p>
+                      <p className="text-xl font-bold text-brand-700 dark:text-brand-400">{formatCurrency(grandTotal)}</p>
+                    </div>
                   </div>
                 </div>
               </CardContent>
