@@ -108,6 +108,63 @@ async function main() {
     }),
   ]);
 
+  // ---- Annual twins (10 months' price for 12 — same limits/menus as the
+  // matching monthly plan, inherited from whatever it's currently set to
+  // rather than hardcoded again here) ----
+  await Promise.all([
+    prisma.plan.upsert({
+      where: { code: "BASIC_ANNUAL" },
+      update: {},
+      create: {
+        code: "BASIC_ANNUAL",
+        name: "Basic",
+        billingCycle: "ANNUAL",
+        priceMonthly: Number(basic.priceMonthly) * 10,
+        maxUsers: basic.maxUsers,
+        maxStores: basic.maxStores,
+        maxParts: basic.maxParts,
+        maxMonthlyTxns: basic.maxMonthlyTxns,
+        maxExcelUploadRows: basic.maxExcelUploadRows,
+        maxStorageMb: basic.maxStorageMb,
+        allowedMenuKeys: basic.allowedMenuKeys,
+      },
+    }),
+    prisma.plan.upsert({
+      where: { code: "PRO_ANNUAL" },
+      update: {},
+      create: {
+        code: "PRO_ANNUAL",
+        name: "Pro",
+        billingCycle: "ANNUAL",
+        priceMonthly: Number(pro.priceMonthly) * 10,
+        maxUsers: pro.maxUsers,
+        maxStores: pro.maxStores,
+        maxParts: pro.maxParts,
+        maxMonthlyTxns: pro.maxMonthlyTxns,
+        maxExcelUploadRows: pro.maxExcelUploadRows,
+        maxStorageMb: pro.maxStorageMb,
+        allowedMenuKeys: pro.allowedMenuKeys,
+      },
+    }),
+    prisma.plan.upsert({
+      where: { code: "ENTERPRISE_ANNUAL" },
+      update: {},
+      create: {
+        code: "ENTERPRISE_ANNUAL",
+        name: "Enterprise",
+        billingCycle: "ANNUAL",
+        priceMonthly: Number(enterprise.priceMonthly) * 10,
+        maxUsers: enterprise.maxUsers,
+        maxStores: enterprise.maxStores,
+        maxParts: enterprise.maxParts,
+        maxMonthlyTxns: enterprise.maxMonthlyTxns,
+        maxExcelUploadRows: enterprise.maxExcelUploadRows,
+        maxStorageMb: enterprise.maxStorageMb,
+        allowedMenuKeys: enterprise.allowedMenuKeys,
+      },
+    }),
+  ]);
+
   // ---- Roles + permissions ----
   for (const roleName of Object.values(RoleName)) {
     const role = await prisma.role.upsert({

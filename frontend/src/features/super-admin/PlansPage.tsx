@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Users, Store, Boxes, Receipt, Sheet, HardDrive, ListChecks } from "lucide-react";
+import { Pencil, Plus, Users, Store, Boxes, Receipt, Sheet, HardDrive, ListChecks } from "lucide-react";
 import { apiClient, getApiErrorMessage } from "@/lib/apiClient";
 import type { Plan } from "@/types";
 import { PageHeader } from "@/components/ui/Feedback";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Input, Label, Textarea } from "@/components/ui/Input";
+import { Input, Label, Select, Textarea } from "@/components/ui/Input";
 import { Dialog } from "@/components/ui/Dialog";
 import { Badge } from "@/components/ui/Badge";
 import { IconFieldRow } from "@/components/ui/IconFieldRow";
@@ -17,8 +17,10 @@ import { PRIMARY_TABS, MORE_MENU_GROUPS } from "@/components/layout/moreMenuItem
 const ALL_MENU_KEYS = [...PRIMARY_TABS.map((t) => t.key), ...MORE_MENU_GROUPS.flatMap((g) => g.items.map((i) => i.key))];
 
 const emptyEditForm = {
+  code: "",
   name: "",
   description: "",
+  billingCycle: "MONTHLY" as "MONTHLY" | "ANNUAL",
   priceMonthly: "0",
   maxUsers: "1",
   maxStores: "1",
@@ -26,12 +28,14 @@ const emptyEditForm = {
   maxMonthlyTxns: "1",
   maxExcelUploadRows: "1",
   maxStorageMb: "1",
+  isCustom: false,
   isActive: true,
   allowedMenuKeys: {} as Record<string, boolean>,
 };
 
 export function PlansPage() {
   const [editing, setEditing] = useState<Plan | null>(null);
+  const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(emptyEditForm);
   const [error, setError] = useState<string | null>(null);
   const { push } = useToast();
@@ -47,6 +51,7 @@ export function PlansPage() {
       const payload = {
         name: form.name,
         description: form.description.trim() || null,
+        billingCycle: form.billingCycle,
         priceMonthly: Number(form.priceMonthly),
         maxUsers: Number(form.maxUsers),
         maxStores: Number(form.maxStores),
@@ -54,24 +59,37 @@ export function PlansPage() {
         maxMonthlyTxns: Number(form.maxMonthlyTxns),
         maxExcelUploadRows: Number(form.maxExcelUploadRows),
         maxStorageMb: Number(form.maxStorageMb),
+        isCustom: form.isCustom,
         isActive: form.isActive,
         allowedMenuKeys: ALL_MENU_KEYS.filter((k) => form.allowedMenuKeys[k]),
       };
+      if (creating) return apiClient.post("/admin/plans", { ...payload, code: form.code.trim() });
       return apiClient.put(`/admin/plans/${editing!.id}`, payload);
     },
     onSuccess: () => {
-      push({ tone: "success", title: "Plan updated" });
+      push({ tone: "success", title: creating ? "Plan created" : "Plan updated" });
       queryClient.invalidateQueries({ queryKey: ["admin-plans"] });
       setEditing(null);
+      setCreating(false);
     },
     onError: (err) => setError(getApiErrorMessage(err)),
   });
 
+  function openCreate() {
+    setCreating(true);
+    setEditing(null);
+    setForm(emptyEditForm);
+    setError(null);
+  }
+
   function openEdit(plan: Plan) {
+    setCreating(false);
     setEditing(plan);
     setForm({
+      code: plan.code,
       name: plan.name,
       description: plan.description ?? "",
+      billingCycle: plan.billingCycle,
       priceMonthly: plan.priceMonthly,
       maxUsers: String(plan.maxUsers),
       maxStores: String(plan.maxStores),
@@ -79,6 +97,7 @@ export function PlansPage() {
       maxMonthlyTxns: String(plan.maxMonthlyTxns),
       maxExcelUploadRows: String(plan.maxExcelUploadRows),
       maxStorageMb: String(plan.maxStorageMb),
+      isCustom: plan.isCustom,
       isActive: plan.isActive,
       allowedMenuKeys: Object.fromEntries(ALL_MENU_KEYS.map((k) => [k, plan.allowedMenuKeys.includes(k)])),
     });
@@ -93,7 +112,15 @@ export function PlansPage() {
 
   return (
     <div>
-      <PageHeader title="Subscription Plans" subtitle="Pricing and usage limits for each plan dealers can subscribe to." />
+      <PageHeader
+        title="Subscription Plans"
+        subtitle="Pricing and usage limits for each plan dealers can subscribe to."
+        actions={
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="h-4 w-4" /> Create Plan
+          </Button>
+        }
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -112,11 +139,15 @@ export function PlansPage() {
                       <p className="text-base font-bold text-slate-900 dark:text-slate-100">{plan.name}</p>
                       <p className="mt-0.5 text-2xl font-bold text-brand-600 dark:text-brand-400">
                         {formatCurrency(plan.priceMonthly)}
-                        <span className="text-xs font-medium text-slate-400 dark:text-slate-500"> /month</span>
+                        <span className="text-xs font-medium text-slate-400 dark:text-slate-500"> /{plan.billingCycle === "ANNUAL" ? "year" : "month"}</span>
                       </p>
+                      <p className="mt-0.5 text-[11px] font-medium text-slate-400 dark:text-slate-500">{plan.code}</p>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      <Badge tone={plan.isActive ? "success" : "neutral"}>{plan.isActive ? "Active" : "Inactive"}</Badge>
+                      <div className="flex gap-1.5">
+                        {plan.isCustom && <Badge tone="purple">Custom</Badge>}
+                        <Badge tone={plan.isActive ? "success" : "neutral"}>{plan.isActive ? "Active" : "Inactive"}</Badge>
+                      </div>
                       <button
                         onClick={() => openEdit(plan)}
                         className="rounded-md p-1.5 text-slate-400 hover:bg-brand-50 hover:text-brand-600 dark:text-slate-500 dark:hover:bg-brand-500/15 dark:hover:text-brand-400"
@@ -170,32 +201,61 @@ export function PlansPage() {
       )}
 
       <Dialog
-        open={!!editing}
-        onOpenChange={(v) => !v && setEditing(null)}
-        title={`Edit Plan — ${editing?.name ?? ""}`}
+        open={creating || !!editing}
+        onOpenChange={(v) => {
+          if (!v) {
+            setCreating(false);
+            setEditing(null);
+          }
+        }}
+        title={creating ? "Create Plan" : `Edit Plan — ${editing?.name ?? ""}`}
         className="max-w-2xl"
         footer={
           <>
-            <Button variant="outline" onClick={() => setEditing(null)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCreating(false);
+                setEditing(null);
+              }}
+            >
               Cancel
             </Button>
             <Button isLoading={save.isPending} onClick={() => { setError(null); save.mutate(); }}>
-              Save Changes
+              {creating ? "Create Plan" : "Save Changes"}
             </Button>
           </>
         }
       >
         <div className="max-h-[70vh] space-y-4 overflow-y-auto thin-scroll pr-1">
           {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">{error}</div>}
+          {creating && (
+            <div>
+              <Label>Plan Code</Label>
+              <Input
+                placeholder="e.g. PRO_ANNUAL or ACME_CUSTOM"
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+              />
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Uppercase letters, numbers and _ only. Can't be changed later.</p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Plan Name</Label>
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
             <div>
-              <Label>Price / Month (₹)</Label>
-              <Input type="number" min={0} value={form.priceMonthly} onChange={(e) => setForm({ ...form, priceMonthly: e.target.value })} />
+              <Label>Billing Cycle</Label>
+              <Select value={form.billingCycle} onChange={(e) => setForm({ ...form, billingCycle: e.target.value as "MONTHLY" | "ANNUAL" })}>
+                <option value="MONTHLY">Monthly</option>
+                <option value="ANNUAL">Annual</option>
+              </Select>
             </div>
+          </div>
+          <div>
+            <Label>Price / {form.billingCycle === "ANNUAL" ? "Year" : "Month"} (₹)</Label>
+            <Input type="number" min={0} value={form.priceMonthly} onChange={(e) => setForm({ ...form, priceMonthly: e.target.value })} />
           </div>
           <div>
             <Label>Description</Label>
@@ -237,6 +297,15 @@ export function PlansPage() {
               onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
             />
             Active (selectable when onboarding a new dealer)
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-navy-600"
+              checked={form.isCustom}
+              onChange={(e) => setForm({ ...form, isCustom: e.target.checked })}
+            />
+            Custom plan (hidden from the dealer self-service plan screen — assign it directly from a dealer's profile instead)
           </label>
 
           <div className="border-t border-slate-100 pt-4 dark:border-navy-800">

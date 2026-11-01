@@ -1,14 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
-import { CheckCircle2, Copy, LogOut, ShieldAlert, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Copy, LogOut, MessageCircle, Phone, ShieldAlert, ShieldCheck } from "lucide-react";
 import { apiClient, getApiErrorMessage } from "@/lib/apiClient";
 import type { Plan } from "@/types";
 import { useAuth } from "@/features/auth/AuthContext";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
-import { formatCurrency } from "@/lib/utils";
-import { PLATFORM_UPI_ID, buildUpiLink } from "@/lib/payment";
+import { formatCurrency, cn } from "@/lib/utils";
+import { PLATFORM_UPI_ID, PLATFORM_CONTACT_NUMBER, buildUpiLink } from "@/lib/payment";
 
 function isTrialExpired(tenant: { status?: string; trialEndsAt?: string | null } | null): boolean {
   if (!tenant || tenant.status !== "TRIAL" || !tenant.trialEndsAt) return false;
@@ -21,7 +21,7 @@ function PlanCard({ plan, onSelect, isSelecting }: { plan: Plan; onSelect: () =>
       <p className="text-base font-bold text-slate-900 dark:text-slate-100">{plan.name}</p>
       <p className="mt-1 text-2xl font-bold text-brand-600 dark:text-brand-400">
         {formatCurrency(plan.priceMonthly)}
-        <span className="text-xs font-medium text-slate-400 dark:text-slate-500"> /month</span>
+        <span className="text-xs font-medium text-slate-400 dark:text-slate-500"> /{plan.billingCycle === "ANNUAL" ? "year" : "month"}</span>
       </p>
       {plan.description && <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{plan.description}</p>}
       <ul className="mt-3 flex-1 space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
@@ -88,12 +88,60 @@ function PaymentStep({ plan, tenantName, onDone }: { plan: Plan; tenantName?: st
   );
 }
 
+function CycleToggle({ value, onChange }: { value: "MONTHLY" | "ANNUAL"; onChange: (v: "MONTHLY" | "ANNUAL") => void }) {
+  return (
+    <div className="mx-auto flex w-fit rounded-full border border-slate-200 bg-white p-1 dark:border-navy-700 dark:bg-navy-900">
+      {(["MONTHLY", "ANNUAL"] as const).map((v) => (
+        <button
+          key={v}
+          onClick={() => onChange(v)}
+          className={cn(
+            "rounded-full px-4 py-1.5 text-sm font-semibold transition-colors",
+            value === v ? "bg-brand-600 text-white" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+          )}
+        >
+          {v === "MONTHLY" ? "Monthly" : "Annual"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Dealer-facing fallback for needs the 3 standard tiers don't cover — points at the platform owner's own number rather than self-service, since custom pricing needs a real conversation. */
+function CustomPlanCard() {
+  return (
+    <div className="mt-4 flex flex-col items-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center dark:border-navy-700 dark:bg-navy-900/60">
+      <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Need something different?</p>
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        If none of these plans fit your dealership, contact us for a custom plan tailored to your needs.
+      </p>
+      <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
+        <a
+          href={`tel:+91${PLATFORM_CONTACT_NUMBER}`}
+          className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-white dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-800"
+        >
+          <Phone className="h-3.5 w-3.5" /> Call {PLATFORM_CONTACT_NUMBER}
+        </a>
+        <a
+          href={`https://wa.me/91${PLATFORM_CONTACT_NUMBER}?text=${encodeURIComponent("Hi, I'd like to discuss a custom plan for my dealership on Invento.")}`}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-white dark:border-navy-700 dark:text-slate-300 dark:hover:bg-navy-800"
+        >
+          <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
+        </a>
+      </div>
+    </div>
+  );
+}
+
 export function TrialExpiredModal() {
   const { tenant, user, hasRole, logout, refreshTenant } = useAuth();
   const { push } = useToast();
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState<Plan | null>(null);
   const [activatedPlan, setActivatedPlan] = useState<Plan | null>(null);
+  const [cycle, setCycle] = useState<"MONTHLY" | "ANNUAL">("MONTHLY");
 
   const expired = isTrialExpired(tenant);
   const isAdmin = hasRole("TENANT_ADMIN");
@@ -103,6 +151,9 @@ export function TrialExpiredModal() {
     queryFn: async () => (await apiClient.get<{ data: Plan[] }>("/tenant/plans")).data.data,
     enabled: expired && isAdmin,
   });
+
+  const visiblePlans = useMemo(() => plans?.filter((p) => p.billingCycle === cycle) ?? [], [plans, cycle]);
+  const hasAnnualPlans = plans?.some((p) => p.billingCycle === "ANNUAL") ?? false;
 
   const selectPlan = useMutation({
     mutationFn: async (planCode: string) => apiClient.post("/tenant/select-plan", { planCode }),
@@ -157,11 +208,15 @@ export function TrialExpiredModal() {
                   ))}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  {plans?.map((plan) => (
-                    <PlanCard key={plan.id} plan={plan} onSelect={() => setConfirming(plan)} isSelecting={selectPlan.isPending && confirming?.id === plan.id} />
-                  ))}
-                </div>
+                <>
+                  {hasAnnualPlans && <div className="mb-4"><CycleToggle value={cycle} onChange={setCycle} /></div>}
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    {visiblePlans.map((plan) => (
+                      <PlanCard key={plan.id} plan={plan} onSelect={() => setConfirming(plan)} isSelecting={selectPlan.isPending && confirming?.id === plan.id} />
+                    ))}
+                  </div>
+                  <CustomPlanCard />
+                </>
               )
             ) : (
               <p className="mx-auto max-w-xs text-center text-sm text-slate-500 dark:text-slate-400">

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { requireAuth } from "../../middleware/auth.middleware";
 import { requireRole, ROLE_GROUPS } from "../../middleware/rbac.middleware";
-import { createTenantSchema, updateTenantSchema, updatePlanSchema, updateMenuAccessSchema } from "./admin.schema";
+import { createTenantSchema, updateTenantSchema, updatePlanSchema, createPlanSchema, updateMenuAccessSchema } from "./admin.schema";
 import * as adminService from "./admin.service";
 import { recordAudit } from "../audit/audit.service";
 
@@ -22,6 +22,16 @@ router.get(
   asyncHandler(async (_req, res) => {
     const plans = await adminService.listPlans();
     res.json({ success: true, data: plans });
+  })
+);
+
+router.post(
+  "/plans",
+  asyncHandler(async (req, res) => {
+    const input = createPlanSchema.parse(req.body);
+    const plan = await adminService.createPlan(input);
+    await recordAudit({ req, tenantId: null, userId: req.user!.id, action: "PLAN_CREATED", entityType: "Plan", entityId: plan.id, newValue: input });
+    res.status(201).json({ success: true, data: plan });
   })
 );
 

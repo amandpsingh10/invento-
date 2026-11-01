@@ -1003,9 +1003,6 @@ export function SellPartPage() {
                       onRemove={() => removeRow(line.key)}
                     />
                   ))}
-                  <Button type="button" variant="outline" className="w-full" onClick={addRow}>
-                    <Plus className="h-4 w-4" /> Add from Stock
-                  </Button>
                 </div>
               </CardContent>
             </Card>

@@ -42,11 +42,9 @@ enum TenantStatus {
   CANCELLED
 }
 
-enum PlanCode {
-  TRIAL
-  BASIC
-  PRO
-  ENTERPRISE
+enum BillingCycle {
+  MONTHLY
+  ANNUAL
 }
 
 enum MasterStatus {
@@ -119,26 +117,39 @@ enum SubscriptionStatus {
 // --------------------------------------------------------------------------
 
 model Plan {
-  id                 String   @id @default(uuid())
-  code               PlanCode @unique
+  id                 String       @id @default(uuid())
+  // Free-form slug (e.g. "BASIC", "BASIC_ANNUAL", or a one-off custom
+  // code) rather than a fixed enum, so Super Admin can create new plans —
+  // annual twins of the standard tiers, or a bespoke plan negotiated with
+  // one dealer — without a schema change.
+  code               String       @unique
   name               String
   description        String?
-  priceMonthly       Decimal  @default(0) @db.Decimal(12, 2)
-  maxUsers           Int      @default(5)
-  maxStores          Int      @default(1)
-  maxParts           Int      @default(500)
-  maxMonthlyTxns     Int      @default(1000)
-  maxExcelUploadRows Int      @default(1000)
-  maxStorageMb       Int      @default(500)
+  billingCycle       BillingCycle @default(MONTHLY)
+  // Amount charged per billingCycle (so for an ANNUAL plan this is the
+  // yearly total, not a monthly figure) despite the field's name, kept
+  // as-is to avoid a risky column rename on the live database.
+  priceMonthly       Decimal      @default(0) @db.Decimal(12, 2)
+  maxUsers           Int          @default(5)
+  maxStores          Int          @default(1)
+  maxParts           Int          @default(500)
+  maxMonthlyTxns     Int          @default(1000)
+  maxExcelUploadRows Int          @default(1000)
+  maxStorageMb       Int          @default(500)
   // Menu keys (see backend/src/modules/admin/menuKeys.ts) a dealer on this
   // plan may access at all — a hard cap enforced on top of each user's own
   // role/menu-access overrides (see UserMenuAccess): a menu absent here is
   // hidden for every user of a tenant on this plan, regardless of role or
   // any explicit per-user grant.
-  allowedMenuKeys    String[] @default([])
-  isActive           Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  allowedMenuKeys    String[]     @default([])
+  // A plan created for one specific dealer's negotiated terms — never
+  // listed on the dealer-facing self-service plan picker (see
+  // tenant.service.ts listSelectablePlans); Super Admin assigns it
+  // directly from the Dealers page instead.
+  isCustom           Boolean      @default(false)
+  isActive           Boolean      @default(true)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
   subscriptions Subscription[]
 

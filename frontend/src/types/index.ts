@@ -442,9 +442,15 @@ export interface LowStockRow {
 
 export interface Plan {
   id: string;
-  code: "TRIAL" | "BASIC" | "PRO" | "ENTERPRISE";
+  // Free-form now (e.g. "BASIC", "BASIC_ANNUAL", or a one-off custom
+  // code) rather than a fixed set — Super Admin can create new plans.
+  code: string;
   name: string;
   description: string | null;
+  billingCycle: "MONTHLY" | "ANNUAL";
+  // Amount charged per billingCycle — a yearly total for an ANNUAL plan,
+  // not a monthly figure, despite the field's name (kept as-is to match
+  // the backend column).
   priceMonthly: string;
   maxUsers: number;
   maxStores: number;
@@ -453,6 +459,7 @@ export interface Plan {
   maxExcelUploadRows: number;
   maxStorageMb: number;
   allowedMenuKeys: string[];
+  isCustom: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

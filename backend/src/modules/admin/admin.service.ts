@@ -2,7 +2,7 @@ import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../lib/apiError";
 import { hashPassword } from "../../lib/password";
 import type { z } from "zod";
-import type { createTenantSchema, updateTenantSchema, updatePlanSchema } from "./admin.schema";
+import type { createTenantSchema, updateTenantSchema, updatePlanSchema, createPlanSchema } from "./admin.schema";
 
 export async function listTenants() {
   const tenants = await prisma.tenant.findMany({
@@ -158,7 +158,13 @@ export async function platformDashboard() {
     where: { status: "ACTIVE" },
     include: { plan: true },
   });
-  const subscriptionRevenue = activeSubs.reduce((sum, s) => sum + Number(s.plan.priceMonthly), 0);
+  // priceMonthly holds the amount charged per the plan's own billing
+  // cycle — an ANNUAL plan's figure is a yearly total, so it's divided by
+  // 12 here to keep this a true monthly-recurring-revenue figure.
+  const subscriptionRevenue = activeSubs.reduce(
+    (sum, s) => sum + Number(s.plan.priceMonthly) / (s.plan.billingCycle === "ANNUAL" ? 12 : 1),
+    0
+  );
 
   return { totalDealers, activeDealers, trialDealers, subscriptionRevenue, activeUsers, transactionsToday };
 }
@@ -166,11 +172,17 @@ export async function platformDashboard() {
 export async function listPlans() {
   // Super Admin's own Plans page is the only caller — it needs every plan,
   // including a deactivated one, to manage it (re-activate, adjust, etc.).
-  return prisma.plan.findMany({ orderBy: { priceMonthly: "asc" } });
+  return prisma.plan.findMany({ orderBy: [{ billingCycle: "asc" }, { priceMonthly: "asc" }] });
 }
 
 export async function updatePlan(id: string, input: z.infer<typeof updatePlanSchema>) {
   const plan = await prisma.plan.findUnique({ where: { id } });
   if (!plan) throw ApiError.notFound("Plan not found");
   return prisma.plan.update({ where: { id }, data: input });
+}
+
+export async function createPlan(input: z.infer<typeof createPlanSchema>) {
+  const existing = await prisma.plan.findUnique({ where: { code: input.code } });
+  if (existing) throw ApiError.conflict(`Plan code "${input.code}" is already in use`, "DUPLICATE_PLAN_CODE");
+  return prisma.plan.create({ data: input });
 }

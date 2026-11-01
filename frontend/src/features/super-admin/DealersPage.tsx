@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Pencil, Plus, Power, PowerOff, Users } from "lucide-react";
 import { apiClient, getApiErrorMessage } from "@/lib/apiClient";
-import type { DealerTenant } from "@/types";
+import type { DealerTenant, Plan } from "@/types";
 import { PageHeader } from "@/components/ui/Feedback";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -55,6 +55,15 @@ export function DealersPage() {
     queryKey: ["admin-tenants"],
     queryFn: async () => (await apiClient.get<{ data: DealerTenant[] }>("/admin/tenants")).data.data,
   });
+
+  const { data: plans } = useQuery({
+    queryKey: ["admin-plans"],
+    queryFn: async () => (await apiClient.get<{ data: Plan[] }>("/admin/plans")).data.data,
+  });
+  // Includes Trial and, unlike the dealer self-service screen, a custom
+  // plan too — Super Admin is allowed to put a new dealer straight onto
+  // either.
+  const assignablePlans = (plans ?? []).filter((p) => p.isActive);
 
   const create = useMutation({
     mutationFn: async () => apiClient.post("/admin/tenants", form),
@@ -225,10 +234,13 @@ export function DealersPage() {
               <div>
                 <Label>Plan</Label>
                 <Select value={form.planCode} onChange={(e) => setForm({ ...form, planCode: e.target.value })}>
-                  <option value="TRIAL">Trial</option>
-                  <option value="BASIC">Basic</option>
-                  <option value="PRO">Pro</option>
-                  <option value="ENTERPRISE">Enterprise</option>
+                  {assignablePlans.map((p) => (
+                    <option key={p.code} value={p.code}>
+                      {p.name}
+                      {p.billingCycle === "ANNUAL" ? " (Annual)" : ""}
+                      {p.isCustom ? " — Custom" : ""}
+                    </option>
+                  ))}
                 </Select>
               </div>
             </div>
