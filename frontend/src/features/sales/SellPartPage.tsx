@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Search,
@@ -65,6 +65,12 @@ interface CartLine {
 type Step = "cart" | "success";
 
 const emptyCustomer: CustomerInput = { name: "", mobile: "", address: "", pincode: "", state: "", city: "", gstin: "", email: "" };
+
+/** Passed via navigate(..., { state }) from a cancelled invoice's "New Sale for Customer" — prefills the customer and starts the cart from its items (quantity left blank, same as any other part match) so the dealer can add, remove or change anything before confirming a genuinely new sale. */
+interface SellPartPrefillState {
+  customer?: CustomerInput;
+  inventoryIds?: string[];
+}
 
 function newRowKey(): string {
   return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `row-${Date.now()}-${Math.random()}`;
@@ -696,9 +702,11 @@ function CartRowMobile({ line, otherInventoryIds, onUpdate, onRemove }: { line: 
 
 export function SellPartPage() {
   const [params] = useSearchParams();
+  const location = useLocation();
+  const prefill = location.state as SellPartPrefillState | null;
   const [step, setStep] = useState<Step>("cart");
   const [cart, setCart] = useState<CartLine[]>(() => [blankLine()]);
-  const [customer, setCustomer] = useState<CustomerInput>(emptyCustomer);
+  const [customer, setCustomer] = useState<CustomerInput>(prefill?.customer ?? emptyCustomer);
   const [customerErrors, setCustomerErrors] = useState<Record<string, string>>({});
   const [createdInvoice, setCreatedInvoice] = useState<Invoice | null>(null);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
@@ -808,6 +816,45 @@ export function SellPartPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preselectId]);
+
+  useEffect(() => {
+    const ids = prefill?.inventoryIds;
+    if (!ids || ids.length === 0) return;
+    Promise.all(
+      ids.map((id) =>
+        apiClient
+          .get(`/inventory/${id}`)
+          .then((res) => res.data.data)
+          .catch(() => null)
+      )
+    ).then((rows) => {
+      const lines: CartLine[] = rows
+        .filter((inv): inv is NonNullable<typeof inv> => inv !== null)
+        .map((inv) => {
+          const mrp = Number(inv.part.mrp);
+          return {
+            ...blankLine(),
+            inventoryId: inv.id,
+            partNo: inv.part.partNo,
+            description: inv.part.description,
+            category: inv.part.category,
+            store: inv.store,
+            bin: inv.bin,
+            rack: inv.rack,
+            availableQty: inv.quantity,
+            taxPercent: Number(inv.part.taxPercent),
+            unit: inv.part.unit ?? "NOS",
+            mrp,
+            discountPercent: "" as const,
+            sellingPrice: mrp,
+            quantity: "" as const,
+          };
+        });
+      if (lines.length > 0) setCart(lines);
+    });
+    // Runs once from the entry navigation's state — never re-fetches as the dealer edits the cart.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleScan() {
     const result = await scanBarcode();

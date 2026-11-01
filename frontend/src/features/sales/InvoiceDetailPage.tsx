@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Printer, Ban, Undo2, FileText } from "lucide-react";
+import { Printer, Ban, Undo2, FileText, ShoppingCart } from "lucide-react";
 import { apiClient, getApiErrorMessage } from "@/lib/apiClient";
-import type { Invoice } from "@/types";
+import type { CustomerInput, Invoice } from "@/types";
 import { PageHeader, Skeleton } from "@/components/ui/Feedback";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -75,6 +75,20 @@ export function InvoiceDetailPage() {
 
   const hasUnreturnedQty = invoice.items.some((item) => item.quantity - item.returnedQty > 0);
 
+  const startNewSaleForCustomer = () => {
+    const customer: CustomerInput = {
+      name: invoice.customer.name,
+      mobile: invoice.customer.mobile,
+      address: invoice.customer.address ?? "",
+      pincode: invoice.customer.pincode ?? "",
+      state: invoice.customer.state ?? "",
+      city: invoice.customer.city ?? "",
+      gstin: invoice.customer.gstin ?? "",
+      email: invoice.customer.email ?? "",
+    };
+    navigate("/sell/new", { state: { customer, inventoryIds: invoice.items.map((i) => i.inventory.id) } });
+  };
+
   return (
     <div>
       <PageHeader
@@ -107,8 +121,24 @@ export function InvoiceDetailPage() {
               </Link>
             )}
             {invoice.status === "CANCELLED" && !invoice.reissuedInvoices?.length && hasUnreturnedQty && (
-              <Button size="sm" variant="outline" isLoading={reissueInvoice.isPending} onClick={() => reissueInvoice.mutate()}>
+              <Button
+                size="sm"
+                variant="outline"
+                title="Bills exactly what wasn't returned, at the same prices — no inventory change."
+                isLoading={reissueInvoice.isPending}
+                onClick={() => reissueInvoice.mutate()}
+              >
                 <FileText className="h-4 w-4" /> Raise Invoice Again
+              </Button>
+            )}
+            {invoice.status === "CANCELLED" && (
+              <Button
+                size="sm"
+                variant="outline"
+                title="Starts a fresh sale for this customer — add, remove, or change parts and quantities freely."
+                onClick={startNewSaleForCustomer}
+              >
+                <ShoppingCart className="h-4 w-4" /> New Sale for Customer
               </Button>
             )}
           </>

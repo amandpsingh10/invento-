@@ -341,7 +341,7 @@ export interface InvoiceItem {
   igstAmount: string;
   lineTotal: string;
   part: Part;
-  inventory: { store: Store; bin: Bin; rack: Rack };
+  inventory: { id: string; store: Store; bin: Bin; rack: Rack };
 }
 
 export interface Invoice {
