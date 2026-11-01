@@ -218,21 +218,13 @@ async function main() {
   }
 
   // ---- Demo tenant ----
-  // name/address are also set on `update` (not just `create`) so re-running
-  // the seed rebrands an already-existing tenant rather than leaving it
-  // stuck with whatever it was first created with.
+  // `update: {}` deliberately touches nothing — this tenant (DEMO001) is
+  // also where the real AMAN ENTERPRISES account lives, so re-running the
+  // seed must never overwrite a name/address/GSTIN the dealer has since
+  // edited for real. Only `create` sets these, for a genuinely fresh DB.
   const tenant = await prisma.tenant.upsert({
     where: { dealerCode: "DEMO001" },
-    update: {
-      name: "AMAN ENTERPRISES",
-      address: "SOHNA ROAD, FARIDABAD",
-      state: "Haryana",
-      pincode: "121002",
-      // Placeholder — replace with the real dealer GSTIN via Administration
-      // (or a future tenant-settings screen); format-valid so it exercises
-      // the invoice layout correctly in the meantime.
-      gstin: "06AAAAA0000A1Z5",
-    },
+    update: {},
     create: {
       dealerCode: "DEMO001",
       name: "AMAN ENTERPRISES",
@@ -257,10 +249,15 @@ async function main() {
   }
 
   // ---- Demo users ----
+  // `update: {}` deliberately touches nothing — this tenant (DEMO001) is
+  // also where the real AMAN ENTERPRISES account lives, and an earlier
+  // version of this script unconditionally reset mobile back to its demo
+  // placeholder on every re-run, silently locking the real admin out of
+  // their own login. mobile/email/name are only ever set at creation now.
   const [tenantAdmin, inventoryManager, storeUser] = await Promise.all([
     prisma.user.upsert({
       where: { tenantId_email: { tenantId: tenant.id, email: "admin@demo.com" } },
-      update: { mobile: "9876500001" },
+      update: {},
       create: {
         tenantId: tenant.id,
         email: "admin@demo.com",
@@ -273,7 +270,7 @@ async function main() {
     }),
     prisma.user.upsert({
       where: { tenantId_email: { tenantId: tenant.id, email: "inventory@demo.com" } },
-      update: { mobile: "9876500002" },
+      update: {},
       create: {
         tenantId: tenant.id,
         email: "inventory@demo.com",
@@ -286,7 +283,7 @@ async function main() {
     }),
     prisma.user.upsert({
       where: { tenantId_email: { tenantId: tenant.id, email: "store@demo.com" } },
-      update: { mobile: "9876500003" },
+      update: {},
       create: {
         tenantId: tenant.id,
         email: "store@demo.com",
