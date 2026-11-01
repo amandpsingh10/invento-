@@ -7,7 +7,7 @@ import type { Issue, PagedResult } from "@/types";
 import { PageHeader, Pagination } from "@/components/ui/Feedback";
 import { Card } from "@/components/ui/Card";
 import { Input, Select } from "@/components/ui/Input";
-import { Badge } from "@/components/ui/Badge";
+import { Badge, StatusDot } from "@/components/ui/Badge";
 import { IconFieldRow } from "@/components/ui/IconFieldRow";
 import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { formatDate } from "@/lib/utils";
@@ -124,7 +124,7 @@ export function IssuedPartsPage() {
               { header: "Date", render: (issue) => formatDate(issue.issueDate) },
               { header: "Parts", render: (issue) => partsSummary(issue) },
               { header: "Reference", render: (issue) => issue.reference ?? "—" },
-              { header: "Status", render: (issue) => <Badge tone={STATUS_TONE[issue.status] ?? "neutral"}>{issue.status.replace("_", " ")}</Badge> },
+              { header: "Status", render: (issue) => <StatusDot tone={STATUS_TONE[issue.status] ?? "neutral"}>{issue.status.replace("_", " ")}</StatusDot> },
               {
                 header: "Actions",
                 align: "right",

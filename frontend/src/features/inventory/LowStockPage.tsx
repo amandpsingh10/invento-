@@ -7,7 +7,7 @@ import type { LowStockRow, PagedResult, Store } from "@/types";
 import { PageHeader, Pagination } from "@/components/ui/Feedback";
 import { Card } from "@/components/ui/Card";
 import { Input, Select } from "@/components/ui/Input";
-import { Badge, stockStatusTone, stockStatusLabel } from "@/components/ui/Badge";
+import { StatusDot, stockStatusTone, stockStatusLabel } from "@/components/ui/Badge";
 import { CategoryBadge } from "@/components/ui/CategoryBadge";
 import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { formatCurrency, formatNumber } from "@/lib/utils";
@@ -89,7 +89,7 @@ export function LowStockPage() {
                   </span>
                 ),
               },
-              { header: "Status", render: (row) => <Badge tone={stockStatusTone(row.status)}>{stockStatusLabel(row.status)}</Badge> },
+              { header: "Status", render: (row) => <StatusDot tone={stockStatusTone(row.status)}>{stockStatusLabel(row.status)}</StatusDot> },
               {
                 header: "Actions",
                 align: "right",

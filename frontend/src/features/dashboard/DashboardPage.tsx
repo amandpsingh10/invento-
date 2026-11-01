@@ -5,8 +5,9 @@ import { useAuth } from "@/features/auth/AuthContext";
 import type { PagedResult, LowStockRow, Invoice, DashboardSummary } from "@/types";
 import { formatNumber, formatCurrency, formatDate } from "@/lib/utils";
 import { PRODUCT_NAME } from "@/lib/branding";
-import { Badge } from "@/components/ui/Badge";
+import { Badge, StatusDot, stockStatusTone, stockStatusLabel } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/Feedback";
 import {
   Warehouse,
@@ -147,6 +148,8 @@ export function DashboardPage() {
 
   return (
     <div className="pb-4">
+      {/* Mobile/tablet — the approved "modern style" (gradient banner, icon-tile stats). Desktop gets its own plainer, denser block below instead of this one scaled up. */}
+      <div className="lg:hidden">
       <div className="mb-4">
         <h1 className="font-display text-xl font-bold tracking-tight text-slate-900 sm:text-2xl dark:text-slate-100">{PRODUCT_NAME}</h1>
         {tenant && (
@@ -209,42 +212,76 @@ export function DashboardPage() {
         <BigActionButton to="/sell/new" icon={ShoppingCart} title="Sell Part" subtitle="Sell parts to customer" tone="brand" />
         <BigActionButton to="/returns/new" icon={Undo2} title="Return Part" subtitle="Return sold/issued parts" tone="emerald" />
       </div>
+      </div>
 
-      {/* Quick-glance previews — desktop/web only, see comment above */}
-      <div className="hidden gap-4 lg:grid lg:grid-cols-2">
-        <Card>
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-navy-800">
-            <div className="flex items-center gap-2">
-              <Receipt className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Recent Sales</p>
-            </div>
+      {/* Desktop/web — plain, dense operations-console style. */}
+      <div className="hidden lg:block">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+              {tenant?.name}
+              {tenant?.address && ` · ${tenant.address}`}
+            </p>
+            <h1 className="mt-0.5 text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Dashboard</h1>
+          </div>
+          <div className="flex gap-2">
+            <Link to="/returns/new">
+              <Button variant="outline" size="sm">
+                <Undo2 className="h-4 w-4" /> Return Part
+              </Button>
+            </Link>
+            <Link to="/sell/new">
+              <Button size="sm">
+                <ShoppingCart className="h-4 w-4" /> Sell Part
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        <div className="mb-4 grid grid-cols-4 gap-3">
+          <DeskStat to="/inventory/current-stock" dot="bg-brand-500" label="Current Stock" value={cards === undefined ? "—" : formatNumber(cards.totalStockQuantity)} />
+          <DeskStat to="/inventory/low-stock" dot="bg-amber-500" label="Low Stock" value={lowStock === undefined ? "—" : formatNumber(lowStock.total)} />
+          <DeskStat to="/invoices" dot="bg-emerald-500" label="Sales History" value={recentSales === undefined ? "—" : formatNumber(recentSales.total)} />
+          <DeskStat to="/inventory/add" dot="bg-slate-400" label="Add Inventory" value="+" />
+        </div>
+
+        <Card className="mb-4">
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5 dark:border-navy-800">
+            <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Recent Sales</p>
             <Link to="/invoices" className="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400">
               View All
             </Link>
           </div>
           {recentSales && recentSales.items.length > 0 ? (
-            <div className="divide-y divide-slate-100 dark:divide-navy-800">
-              {recentSales.items.map((inv) => (
-                <Link
-                  key={inv.id}
-                  to={`/invoices/${inv.id}`}
-                  className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50 dark:hover:bg-navy-800/60"
-                >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
-                    <Receipt className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-200">{inv.invoiceNumber}</p>
-                    <p className="truncate text-xs text-slate-400 dark:text-slate-500">
-                      {inv.customer.name} · {formatDate(inv.invoiceDate)}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <p className="font-display text-sm font-bold tabular-nums text-slate-900 dark:text-slate-100">{formatCurrency(inv.grandTotal)}</p>
-                    <Badge tone={INVOICE_STATUS_TONE[inv.status] ?? "neutral"}>{inv.status}</Badge>
-                  </div>
-                </Link>
-              ))}
+            <div className="overflow-x-auto thin-scroll">
+              <table className="w-full min-w-max text-left text-[13px]">
+                <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:border-navy-800 dark:bg-navy-800/40 dark:text-slate-500">
+                  <tr>
+                    <th className="whitespace-nowrap px-4 py-2">Invoice No</th>
+                    <th className="whitespace-nowrap px-4 py-2">Date</th>
+                    <th className="whitespace-nowrap px-4 py-2">Customer</th>
+                    <th className="whitespace-nowrap px-4 py-2 text-right">Amount</th>
+                    <th className="whitespace-nowrap px-4 py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-navy-800">
+                  {recentSales.items.map((inv) => (
+                    <tr key={inv.id} className="hover:bg-slate-50 dark:hover:bg-navy-800/40">
+                      <td className="whitespace-nowrap px-4 py-2">
+                        <Link to={`/invoices/${inv.id}`} className="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400">
+                          {inv.invoiceNumber}
+                        </Link>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2 text-slate-500 dark:text-slate-400">{formatDate(inv.invoiceDate)}</td>
+                      <td className="whitespace-nowrap px-4 py-2 text-slate-700 dark:text-slate-300">{inv.customer.name}</td>
+                      <td className="whitespace-nowrap px-4 py-2 text-right font-semibold tabular-nums text-slate-800 dark:text-slate-200">{formatCurrency(inv.grandTotal)}</td>
+                      <td className="whitespace-nowrap px-4 py-2">
+                        <StatusDot tone={INVOICE_STATUS_TONE[inv.status] ?? "neutral"}>{inv.status}</StatusDot>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : (
             <EmptyState title="No sales yet" description="Completed sales will show up here." />
@@ -252,43 +289,38 @@ export function DashboardPage() {
         </Card>
 
         <Card>
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-navy-800">
-            <div className="flex items-center gap-2">
-              <ClipboardCheck className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Low Stock Parts</p>
-            </div>
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5 dark:border-navy-800">
+            <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Low Stock Parts</p>
             <Link to="/inventory/low-stock" className="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400">
               View All
             </Link>
           </div>
           {lowStock && lowStock.items.length > 0 ? (
-            <div className="divide-y divide-slate-100 dark:divide-navy-800">
-              {lowStock.items.map((row) => {
-                const critical = row.status === "OUT_OF_STOCK";
-                return (
-                  <div key={row.id} className="flex items-center gap-3 px-4 py-2.5">
-                    <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-                        critical
-                          ? "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
-                          : "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400"
-                      }`}
-                    >
-                      <AlertTriangle className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-200">{row.partNo}</p>
-                      <p className="truncate text-xs text-slate-400 dark:text-slate-500">{row.description}</p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <p className="font-display text-sm font-bold tabular-nums text-slate-900 dark:text-slate-100">
+            <div className="overflow-x-auto thin-scroll">
+              <table className="w-full min-w-max text-left text-[13px]">
+                <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:border-navy-800 dark:bg-navy-800/40 dark:text-slate-500">
+                  <tr>
+                    <th className="whitespace-nowrap px-4 py-2">Part No</th>
+                    <th className="whitespace-nowrap px-4 py-2">Description</th>
+                    <th className="whitespace-nowrap px-4 py-2 text-right">Qty</th>
+                    <th className="whitespace-nowrap px-4 py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-navy-800">
+                  {lowStock.items.map((row) => (
+                    <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-navy-800/40">
+                      <td className="whitespace-nowrap px-4 py-2 font-medium text-slate-800 dark:text-slate-200">{row.partNo}</td>
+                      <td className="whitespace-nowrap px-4 py-2 text-slate-700 dark:text-slate-300">{row.description}</td>
+                      <td className="whitespace-nowrap px-4 py-2 text-right font-semibold tabular-nums text-slate-800 dark:text-slate-200">
                         {formatNumber(row.availableQty)} {row.unit}
-                      </p>
-                      <Badge tone={critical ? "danger" : "warning"}>{critical ? "Out of stock" : "Low"}</Badge>
-                    </div>
-                  </div>
-                );
-              })}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2">
+                        <StatusDot tone={stockStatusTone(row.status)}>{stockStatusLabel(row.status)}</StatusDot>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : (
             <EmptyState title="Nothing low on stock" description="Every part is above its threshold. Nice work." />
@@ -296,5 +328,17 @@ export function DashboardPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+function DeskStat({ to, dot, label, value }: { to: string; dot: string; label: string; value: string }) {
+  return (
+    <Link to={to} className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5 shadow-card transition-shadow hover:shadow-card-hover dark:border-navy-700 dark:bg-navy-900">
+      <p className="flex items-center gap-1.5 truncate text-[11.5px] text-slate-500 dark:text-slate-400">
+        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
+        {label}
+      </p>
+      <p className="mt-1.5 text-xl font-bold tabular-nums tracking-tight text-slate-900 dark:text-slate-100">{value}</p>
+    </Link>
   );
 }

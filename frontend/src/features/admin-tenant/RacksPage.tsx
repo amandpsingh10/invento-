@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Select } from "@/components/ui/Input";
 import { Dialog } from "@/components/ui/Dialog";
-import { Badge } from "@/components/ui/Badge";
+import { Badge, StatusDot } from "@/components/ui/Badge";
 import { IconFieldRow } from "@/components/ui/IconFieldRow";
 import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { useToast } from "@/components/ui/Toast";
@@ -103,7 +103,7 @@ export function RacksPage() {
             [
               { header: "Rack Code", render: (r) => <span className="font-medium text-slate-800 dark:text-slate-200">{r.code}</span> },
               { header: "Store", render: (r) => r.store?.name },
-              { header: "Status", render: (r) => <Badge tone={r.status === "ACTIVE" ? "success" : "neutral"}>{r.status}</Badge> },
+              { header: "Status", render: (r) => <StatusDot tone={r.status === "ACTIVE" ? "success" : "neutral"}>{r.status}</StatusDot> },
               {
                 header: "Actions",
                 align: "right",

@@ -148,6 +148,7 @@ export function InvoiceDetailPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardContent className="p-0">
+            <div className="overflow-x-auto thin-scroll">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-slate-100 bg-slate-50/70 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-navy-800 dark:bg-navy-800/40 dark:text-slate-400">
                 <tr>
@@ -184,6 +185,7 @@ export function InvoiceDetailPage() {
                 ))}
               </tbody>
             </table>
+            </div>
             <div className="flex justify-end border-t border-slate-100 dark:border-navy-800 p-4">
               <div className="w-56 text-sm">
                 <div className="flex justify-between text-slate-500 dark:text-slate-400">

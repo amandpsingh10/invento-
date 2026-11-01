@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Select } from "@/components/ui/Input";
 import { Dialog } from "@/components/ui/Dialog";
-import { Badge } from "@/components/ui/Badge";
+import { Badge, StatusDot } from "@/components/ui/Badge";
 import { IconFieldRow } from "@/components/ui/IconFieldRow";
 import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { useToast } from "@/components/ui/Toast";
@@ -103,7 +103,7 @@ export function BinsPage() {
             [
               { header: "Bin Code", render: (b) => <span className="font-medium text-slate-800 dark:text-slate-200">{b.code}</span> },
               { header: "Store", render: (b) => b.store?.name },
-              { header: "Status", render: (b) => <Badge tone={b.status === "ACTIVE" ? "success" : "neutral"}>{b.status}</Badge> },
+              { header: "Status", render: (b) => <StatusDot tone={b.status === "ACTIVE" ? "success" : "neutral"}>{b.status}</StatusDot> },
               {
                 header: "Actions",
                 align: "right",

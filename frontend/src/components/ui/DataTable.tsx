@@ -52,11 +52,11 @@ export function DataTable<T>({
   return (
     <>
       <div className="hidden overflow-x-auto thin-scroll md:block">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-slate-100 bg-slate-50/70 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-navy-800 dark:bg-navy-800/40 dark:text-slate-400">
+        <table className="w-full min-w-max text-left text-[13px]">
+          <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:border-navy-800 dark:bg-navy-800/40 dark:text-slate-500">
             <tr>
               {columns.map((c) => (
-                <th key={c.header} className={cn("px-5 py-3", c.align === "right" && "text-right")}>
+                <th key={c.header} className={cn("whitespace-nowrap px-4 py-2.5", c.align === "right" && "text-right")}>
                   {c.header}
                 </th>
               ))}
@@ -64,9 +64,9 @@ export function DataTable<T>({
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-navy-800">
             {items.map((row) => (
-              <tr key={rowKey(row)} className="hover:bg-slate-50/60 dark:hover:bg-navy-800/40">
+              <tr key={rowKey(row)} className="hover:bg-slate-50 dark:hover:bg-navy-800/40">
                 {columns.map((c) => (
-                  <td key={c.header} className={cn("px-5 py-3 text-slate-700 dark:text-slate-300", c.align === "right" && "text-right", c.className)}>
+                  <td key={c.header} className={cn("px-4 py-2.5 text-slate-700 dark:text-slate-300", c.align === "right" && "text-right", c.className)}>
                     {c.render(row)}
                   </td>
                 ))}

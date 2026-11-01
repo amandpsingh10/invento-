@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/ui/Feedback";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
-import { Badge } from "@/components/ui/Badge";
+import { StatusDot } from "@/components/ui/Badge";
 import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { useToast } from "@/components/ui/Toast";
 import { PRIMARY_TABS, MORE_MENU_GROUPS } from "@/components/layout/moreMenuItems";
@@ -158,7 +158,7 @@ export function DealerUsersPage() {
               { header: "Name", render: (u) => <span className="font-medium text-slate-800 dark:text-slate-200">{u.firstName} {u.lastName}</span> },
               { header: "Mobile", render: (u) => u.mobile },
               { header: "Role", render: (u) => u.roles.join(", ").replace(/_/g, " ") },
-              { header: "Status", render: (u) => <Badge tone={u.isActive ? "success" : "neutral"}>{u.isActive ? "Active" : "Inactive"}</Badge> },
+              { header: "Status", render: (u) => <StatusDot tone={u.isActive ? "success" : "neutral"}>{u.isActive ? "Active" : "Inactive"}</StatusDot> },
               {
                 header: "Actions",
                 align: "right",

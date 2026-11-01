@@ -7,7 +7,7 @@ import type { Invoice, PagedResult } from "@/types";
 import { PageHeader, Pagination } from "@/components/ui/Feedback";
 import { Card } from "@/components/ui/Card";
 import { Input, Select } from "@/components/ui/Input";
-import { Badge } from "@/components/ui/Badge";
+import { StatusDot } from "@/components/ui/Badge";
 import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
@@ -55,7 +55,7 @@ export function SalesHistoryPage() {
               { header: "Customer", render: (inv) => `${inv.customer.name} (${inv.customer.mobile})` },
               { header: "Parts", render: (inv) => inv.items.map((i) => `${i.part.partNo} (${i.quantity})`).join(", ") },
               { header: "Grand Total", align: "right", render: (inv) => formatCurrency(inv.grandTotal) },
-              { header: "Status", render: (inv) => <Badge tone={STATUS_TONE[inv.status] ?? "neutral"}>{inv.status}</Badge> },
+              { header: "Status", render: (inv) => <StatusDot tone={STATUS_TONE[inv.status] ?? "neutral"}>{inv.status}</StatusDot> },
               {
                 header: "Actions",
                 align: "right",

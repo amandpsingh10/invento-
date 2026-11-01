@@ -1,6 +1,6 @@
 import { PackageMinus, Hash, Store as StoreIcon, ArrowUpCircle, Undo2 } from "lucide-react";
 import { ReportPage } from "./ReportPage";
-import { Badge } from "@/components/ui/Badge";
+import { Badge, StatusDot } from "@/components/ui/Badge";
 import { IconFieldRow } from "@/components/ui/IconFieldRow";
 import { formatDate } from "@/lib/utils";
 
@@ -71,7 +71,7 @@ export function IssueReportPage() {
         { header: "Store", render: (r) => r.store },
         { header: "Qty Issued", align: "right", render: (r) => r.quantity },
         { header: "Qty Returned", align: "right", render: (r) => r.returnedQty },
-        { header: "Status", render: (r) => <Badge tone="info">{r.status.replace("_", " ")}</Badge> },
+        { header: "Status", render: (r) => <StatusDot tone="info">{r.status.replace("_", " ")}</StatusDot> },
         { header: "Created By", render: (r) => r.createdBy },
       ]}
     />

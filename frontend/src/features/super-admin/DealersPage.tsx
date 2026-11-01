@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Select } from "@/components/ui/Input";
 import { Dialog } from "@/components/ui/Dialog";
-import { Badge } from "@/components/ui/Badge";
+import { StatusDot } from "@/components/ui/Badge";
 import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { useToast } from "@/components/ui/Toast";
 import { formatDate } from "@/lib/utils";
@@ -150,7 +150,7 @@ export function DealersPage() {
               { header: "Name", render: (t) => <span className="font-medium text-slate-800 dark:text-slate-200">{t.name}</span> },
               { header: "Dealer Code", render: (t) => <span className="font-mono text-xs">{t.dealerCode}</span> },
               { header: "Plan", render: (t) => t.plan ?? "—" },
-              { header: "Status", render: (t) => <Badge tone={STATUS_TONE[t.status] ?? "neutral"}>{t.status}</Badge> },
+              { header: "Status", render: (t) => <StatusDot tone={STATUS_TONE[t.status] ?? "neutral"}>{t.status}</StatusDot> },
               { header: "Users", align: "right", render: (t) => t.userCount },
               { header: "Created", render: (t) => formatDate(t.createdAt) },
               {

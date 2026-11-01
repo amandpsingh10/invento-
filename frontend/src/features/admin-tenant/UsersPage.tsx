@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Select, FieldError } from "@/components/ui/Input";
 import { Dialog } from "@/components/ui/Dialog";
-import { Badge } from "@/components/ui/Badge";
+import { Badge, StatusDot } from "@/components/ui/Badge";
 import { IconFieldRow } from "@/components/ui/IconFieldRow";
 import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { useToast } from "@/components/ui/Toast";
@@ -203,7 +203,7 @@ export function UsersPage() {
               { header: "Mobile", render: (u) => u.mobile },
               { header: "Email", render: (u) => u.email },
               { header: "Role", render: (u) => u.roles.join(", ").replace(/_/g, " ") },
-              { header: "Status", render: (u) => <Badge tone={u.isActive ? "success" : "neutral"}>{u.isActive ? "Active" : "Inactive"}</Badge> },
+              { header: "Status", render: (u) => <StatusDot tone={u.isActive ? "success" : "neutral"}>{u.isActive ? "Active" : "Inactive"}</StatusDot> },
               { header: "Last Login", render: (u) => (u.lastLoginAt ? formatDate(u.lastLoginAt) : "Never") },
               {
                 header: "Actions",

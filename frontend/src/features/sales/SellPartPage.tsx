@@ -340,10 +340,13 @@ function CartRowDesktop({
   // within it rather than adding tax on top (see computeTotals above).
   const lineGrandTotal = Math.round(priceNum * qtyNum * 100) / 100;
   const { taxableValue: lineSubtotal, taxAmount: lineTax } = splitTaxInclusiveAmount(lineGrandTotal, line.taxPercent);
-  // Discount is shown/edited in ₹ here (vs. Discount % on mobile) — both
-  // read and write the same canonical discountPercent field on CartLine so
-  // the two surfaces never drift out of sync with each other.
-  const discountAmount = line.mrp !== "" && line.discountPercent !== "" ? Math.round(mrpNum * (line.discountPercent / 100) * 100) / 100 : "";
+  // Discount is shown/edited in ₹ here (vs. Discount % on mobile). Read
+  // directly off mrp - sellingPrice (both stored exactly, to the paisa) —
+  // not derived back from the separately-rounded discountPercent, which
+  // round-trips a small drift into the displayed amount and made it look
+  // like typed digits weren't taking (e.g. typing 6.68 would redisplay as
+  // 6.6 after the percent round-trip, even though sellingPrice was correct).
+  const discountAmount = line.mrp !== "" && line.sellingPrice !== "" ? Math.round((mrpNum - priceNum) * 100) / 100 : "";
   const categoryCode = line.category as PartCategoryCode;
 
   function stepQuantity(direction: 1 | -1) {
@@ -487,26 +490,20 @@ function CartRowDesktop({
           {priceMissing && <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">Selling price is required.</p>}
         </div>
         <div>
-          <Label>Discount (₹)</Label>
+          <Label>Discount (%)</Label>
           <Input
             type="number"
             inputMode="decimal"
             step={0.01}
-            placeholder="0.00"
-            value={discountAmount}
+            placeholder="0"
+            value={line.discountPercent}
             onChange={(e) => {
-              const amount = e.target.value === "" ? "" : Number(e.target.value);
-              if (amount === "") return onUpdate({ discountPercent: "", sellingPrice: mrpNum });
-              // Selling price comes directly from mrp - amount, not from
-              // round-tripping through the rounded discountPercent below —
-              // that round-trip previously reintroduced up to a paisa of
-              // drift from what was actually typed. discountPercent is
-              // still stored (rounded) purely so the mobile Discount %
-              // field stays in sync; it never feeds back into this price.
-              const discountPercent = mrpNum > 0 ? Math.round((amount / mrpNum) * 10000) / 100 : 0;
-              onUpdate({ discountPercent, sellingPrice: Math.round((mrpNum - amount) * 100) / 100 });
+              const discountPercent = e.target.value === "" ? "" : Number(e.target.value);
+              if (discountPercent === "") return onUpdate({ discountPercent: "", sellingPrice: mrpNum });
+              onUpdate({ discountPercent, sellingPrice: priceFromDiscount(mrpNum, discountPercent) });
             }}
           />
+          {discountAmount !== "" && <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{formatCurrency(discountAmount)} off MRP</p>}
         </div>
       </div>
 

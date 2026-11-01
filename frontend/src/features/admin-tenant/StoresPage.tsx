@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Select, Textarea } from "@/components/ui/Input";
 import { Dialog } from "@/components/ui/Dialog";
-import { Badge } from "@/components/ui/Badge";
+import { Badge, StatusDot } from "@/components/ui/Badge";
 import { IconFieldRow } from "@/components/ui/IconFieldRow";
 import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { useToast } from "@/components/ui/Toast";
@@ -109,7 +109,7 @@ export function StoresPage() {
               { header: "Code", render: (s) => <span className="font-medium text-slate-800 dark:text-slate-200">{s.code}</span> },
               { header: "Name", render: (s) => s.name },
               { header: "Address", render: (s) => s.address ?? "—" },
-              { header: "Status", render: (s) => <Badge tone={s.status === "ACTIVE" ? "success" : "neutral"}>{s.status}</Badge> },
+              { header: "Status", render: (s) => <StatusDot tone={s.status === "ACTIVE" ? "success" : "neutral"}>{s.status}</StatusDot> },
               {
                 header: "Actions",
                 align: "right",

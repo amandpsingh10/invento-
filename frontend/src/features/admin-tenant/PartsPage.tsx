@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Select } from "@/components/ui/Input";
 import { Dialog } from "@/components/ui/Dialog";
-import { Badge } from "@/components/ui/Badge";
+import { Badge, StatusDot } from "@/components/ui/Badge";
 import { CategoryBadge } from "@/components/ui/CategoryBadge";
 import { IconFieldRow } from "@/components/ui/IconFieldRow";
 import { DataTable, type DataColumn } from "@/components/ui/DataTable";
@@ -244,7 +244,7 @@ export function PartsPage() {
               { header: "MRP", align: "right", render: (p) => formatCurrency(p.mrp) },
               { header: "NDP", align: "right", render: (p) => formatCurrency(p.ndp) },
               { header: "Min. Stock", align: "right", render: (p) => p.minimumStockLevel },
-              { header: "Status", render: (p) => <Badge tone={p.status === "ACTIVE" ? "success" : "neutral"}>{p.status}</Badge> },
+              { header: "Status", render: (p) => <StatusDot tone={p.status === "ACTIVE" ? "success" : "neutral"}>{p.status}</StatusDot> },
               {
                 header: "Actions",
                 align: "right",
