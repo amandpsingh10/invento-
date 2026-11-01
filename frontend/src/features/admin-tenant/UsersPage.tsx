@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { UserPlus, Ban, Pencil, KeyRound, MoreVertical, Phone, Mail, Shield, Clock } from "lucide-react";
+import { UserPlus, Ban, Pencil, KeyRound, ShieldCheck, MoreVertical, Phone, Mail, Shield, Clock } from "lucide-react";
 import { apiClient, getApiErrorMessage } from "@/lib/apiClient";
 import type { AppUser, RoleName } from "@/types";
 import { PageHeader } from "@/components/ui/Feedback";
@@ -14,6 +14,7 @@ import { IconFieldRow } from "@/components/ui/IconFieldRow";
 import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { useToast } from "@/components/ui/Toast";
 import { formatDate } from "@/lib/utils";
+import { PRIMARY_TABS, MORE_MENU_GROUPS } from "@/components/layout/moreMenuItems";
 
 const ROLES: { value: RoleName; label: string }[] = [
   { value: "TENANT_ADMIN", label: "Tenant Admin" },
@@ -26,7 +27,137 @@ const emptyCreateForm = { email: "", mobile: "", firstName: "", lastName: "", pa
 
 type EditForm = { firstName: string; lastName: string; email: string; mobile: string; role: RoleName; isActive: boolean };
 
-function UserMobileCard({ u, onEdit, onResetPassword, onDeactivate }: { u: AppUser; onEdit: () => void; onResetPassword: () => void; onDeactivate: () => void }) {
+/** Whether a menu item is visible to this set of roles by default, before any override is applied. */
+function roleDefault(roles: RoleName[] | undefined, userRoles: RoleName[]): boolean {
+  return !roles || roles.some((r) => userRoles.includes(r));
+}
+
+/**
+ * Tenant Admin's own version of Super Admin's DealerUsersPage menu-access
+ * editor — same UI, scoped to /users/:id/menu-access (this tenant's own
+ * users only) instead of /admin/users/:id/menu-access (any tenant). A menu
+ * a plan doesn't include stays hidden no matter what's checked here — see
+ * auth.service.ts loadMenuAccess, which applies that cap on top.
+ */
+function MenuAccessDialog({ user, onClose }: { user: AppUser; onClose: () => void }) {
+  const { push } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: overrides, isLoading } = useQuery({
+    queryKey: ["user-menu-access", user.id],
+    queryFn: async () => (await apiClient.get<{ data: Record<string, boolean> }>(`/users/${user.id}/menu-access`)).data.data,
+  });
+
+  const [checked, setChecked] = useState<Record<string, boolean> | null>(null);
+
+  // Seed local checkbox state from role-defaults + fetched overrides, once per fetch.
+  if (overrides && !checked) {
+    const initial: Record<string, boolean> = {};
+    for (const tab of PRIMARY_TABS) initial[tab.key] = overrides[tab.key] ?? roleDefault(tab.roles, user.roles);
+    for (const group of MORE_MENU_GROUPS) {
+      for (const item of group.items) initial[item.key] = overrides[item.key] ?? roleDefault(item.roles, user.roles);
+    }
+    setChecked(initial);
+  }
+
+  const save = useMutation({
+    mutationFn: async () => {
+      if (!checked) return;
+      const items = [
+        ...PRIMARY_TABS.map((tab) => ({ key: tab.key, roles: tab.roles })),
+        ...MORE_MENU_GROUPS.flatMap((g) => g.items.map((item) => ({ key: item.key, roles: item.roles }))),
+      ]
+        // Only persist an explicit override where it actually differs from
+        // the role default — an untouched item stays undetermined server-side
+        // so it keeps tracking the role default automatically in future.
+        .filter(({ key, roles }) => checked[key] !== roleDefault(roles, user.roles))
+        .map(({ key }) => ({ menuKey: key, allowed: checked[key] }));
+      return apiClient.put(`/users/${user.id}/menu-access`, { items });
+    },
+    onSuccess: () => {
+      push({ tone: "success", title: "Menu access updated" });
+      queryClient.invalidateQueries({ queryKey: ["user-menu-access", user.id] });
+      onClose();
+    },
+    onError: (err) => push({ tone: "error", title: "Failed", description: getApiErrorMessage(err) }),
+  });
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(v) => !v && onClose()}
+      title={`Menu Access — ${user.firstName} ${user.lastName}`}
+      description="Choose which menu items this user can see. Unchecked items are hidden even if their role would normally allow them."
+      className="max-w-xl"
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button isLoading={save.isPending} onClick={() => save.mutate()}>
+            Save Changes
+          </Button>
+        </>
+      }
+    >
+      {isLoading || !checked ? (
+        <div className="py-6 text-center text-sm text-slate-400 dark:text-slate-500">Loading…</div>
+      ) : (
+        <div className="max-h-[60vh] space-y-4 overflow-y-auto thin-scroll pr-1">
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Primary Tabs</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {PRIMARY_TABS.map((tab) => (
+                <label key={tab.key} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 dark:border-navy-700 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-navy-600"
+                    checked={checked[tab.key] ?? true}
+                    onChange={(e) => setChecked({ ...checked, [tab.key]: e.target.checked })}
+                  />
+                  <span className="truncate">{tab.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {MORE_MENU_GROUPS.map((group) => (
+            <div key={group.label}>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{group.label}</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {group.items.map((item) => (
+                  <label key={item.key} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 dark:border-navy-700 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-navy-600"
+                      checked={checked[item.key] ?? true}
+                      onChange={(e) => setChecked({ ...checked, [item.key]: e.target.checked })}
+                    />
+                    <span className="truncate">{item.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
+function UserMobileCard({
+  u,
+  onEdit,
+  onMenuAccess,
+  onResetPassword,
+  onDeactivate,
+}: {
+  u: AppUser;
+  onEdit: () => void;
+  onMenuAccess: () => void;
+  onResetPassword: () => void;
+  onDeactivate: () => void;
+}) {
   const initials = `${u.firstName[0] ?? ""}${u.lastName[0] ?? ""}`.toUpperCase();
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-navy-700 dark:bg-navy-900">
@@ -68,6 +199,12 @@ function UserMobileCard({ u, onEdit, onResetPassword, onDeactivate }: { u: AppUs
           <DropdownMenu.Portal>
             <DropdownMenu.Content align="end" sideOffset={6} className="z-50 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-navy-700 dark:bg-navy-900">
               <DropdownMenu.Item
+                onSelect={onMenuAccess}
+                className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-slate-600 outline-none hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-navy-800"
+              >
+                <ShieldCheck className="h-4 w-4" /> Menu Access
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
                 onSelect={onResetPassword}
                 className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-slate-600 outline-none hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-navy-800"
               >
@@ -101,6 +238,8 @@ export function UsersPage() {
   const [resetPasswordUser, setResetPasswordUser] = useState<AppUser | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [resetError, setResetError] = useState<string | null>(null);
+
+  const [menuAccessUser, setMenuAccessUser] = useState<AppUser | null>(null);
 
   const { push } = useToast();
   const queryClient = useQueryClient();
@@ -193,6 +332,7 @@ export function UsersPage() {
             <UserMobileCard
               u={u}
               onEdit={() => openEdit(u)}
+              onMenuAccess={() => setMenuAccessUser(u)}
               onResetPassword={() => openResetPassword(u)}
               onDeactivate={() => deactivateUser.mutate(u.id)}
             />
@@ -216,6 +356,13 @@ export function UsersPage() {
                       title="Edit user"
                     >
                       <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setMenuAccessUser(u)}
+                      className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-navy-800 dark:hover:text-slate-200"
+                      title="Menu Access"
+                    >
+                      <ShieldCheck className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => openResetPassword(u)}
@@ -399,6 +546,8 @@ export function UsersPage() {
           <FieldError message="Minimum 8 characters, with uppercase, lowercase and a number." />
         </div>
       </Dialog>
+
+      {menuAccessUser && <MenuAccessDialog user={menuAccessUser} onClose={() => setMenuAccessUser(null)} />}
     </div>
   );
 }

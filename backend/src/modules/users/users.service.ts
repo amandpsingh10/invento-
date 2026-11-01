@@ -2,7 +2,7 @@ import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../lib/apiError";
 import { hashPassword } from "../../lib/password";
 import type { z } from "zod";
-import type { createUserSchema, updateUserSchema, resetUserPasswordSchema } from "./users.schema";
+import type { createUserSchema, updateUserSchema, resetUserPasswordSchema, updateUserMenuAccessSchema } from "./users.schema";
 
 export async function listUsers(tenantId: string) {
   const users = await prisma.user.findMany({
@@ -101,6 +101,35 @@ export async function deactivateUser(tenantId: string, id: string) {
   const user = await prisma.user.findFirst({ where: { id, tenantId } });
   if (!user) throw ApiError.notFound("User not found");
   return prisma.user.update({ where: { id }, data: { isActive: false, refreshTokenHash: null } });
+}
+
+/**
+ * Tenant Admin's own view of a dealer user's per-menu overrides — a Super
+ * Admin can do the same from the platform side (admin.service.ts), scoped
+ * instead to every tenant; this one is scoped to the caller's own tenant
+ * only, via the same findFirst({ id, tenantId }) ownership check every
+ * other mutation in this file uses. A menu absent from the tenant's plan
+ * (Plan.allowedMenuKeys) stays hidden regardless of what's set here — see
+ * auth.service.ts loadMenuAccess, which applies that cap on top.
+ */
+export async function getUserMenuAccess(tenantId: string, id: string) {
+  const user = await prisma.user.findFirst({ where: { id, tenantId } });
+  if (!user) throw ApiError.notFound("User not found");
+  const rows = await prisma.userMenuAccess.findMany({ where: { userId: id } });
+  return rows.reduce<Record<string, boolean>>((acc, r) => {
+    acc[r.menuKey] = r.allowed;
+    return acc;
+  }, {});
+}
+
+export async function setUserMenuAccess(tenantId: string, id: string, items: z.infer<typeof updateUserMenuAccessSchema>["items"]) {
+  const user = await prisma.user.findFirst({ where: { id, tenantId } });
+  if (!user) throw ApiError.notFound("User not found");
+  await prisma.$transaction([
+    prisma.userMenuAccess.deleteMany({ where: { userId: id } }),
+    ...(items.length ? [prisma.userMenuAccess.createMany({ data: items.map((i) => ({ userId: id, menuKey: i.menuKey, allowed: i.allowed })) })] : []),
+  ]);
+  return getUserMenuAccess(tenantId, id);
 }
 
 /** Tenant admin resets another dealer user's password (e.g. they're locked out and forgot-password has no email delivery wired up yet). */

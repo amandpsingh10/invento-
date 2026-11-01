@@ -7,6 +7,7 @@ import type { Issue } from "@/types";
 import { Skeleton } from "@/components/ui/Feedback";
 import { Badge } from "@/components/ui/Badge";
 import { CategoryBadge } from "@/components/ui/CategoryBadge";
+import { PART_CATEGORY_LABELS, type PartCategoryCode } from "@/lib/partCategory";
 import { useToast } from "@/components/ui/Toast";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { PRODUCT_NAME } from "@/lib/branding";
@@ -274,33 +275,34 @@ export function IssuePrintPage() {
         <table className="mt-5 w-full max-w-full table-fixed border-collapse text-left text-sm">
           <thead className="border-y border-slate-200 text-xs font-semibold uppercase tracking-wide text-slate-500">
             <tr>
-              <th className="w-[6%] py-2">S.No</th>
-              <th className="w-[13%] py-2">Part No</th>
-              <th className="w-[19%] py-2">Description</th>
-              <th className="w-[12%] py-2">Category</th>
+              <th className="w-[5%] py-2">S.No</th>
+              <th className="w-[24%] py-2">Part Details</th>
+              <th className="w-[14%] py-2">Category</th>
               <th className="w-[15%] py-2">Location</th>
-              <th className="w-[10%] py-2 text-right">Qty Issued</th>
-              <th className="w-[10%] py-2 text-right">Qty Returned</th>
-              <th className="w-[8%] py-2 text-right">MRP (₹)</th>
-              <th className="w-[9%] py-2 text-right">Total (₹)</th>
+              <th className="w-[8%] py-2 text-right">Qty Issued</th>
+              <th className="w-[7%] py-2">Unit</th>
+              <th className="w-[8%] py-2 text-right">Qty Returned</th>
+              <th className="w-[9%] py-2 text-right">MRP (₹)</th>
+              <th className="w-[10%] py-2 text-right">Total (₹)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {issue.items.map((item, i) => (
               <tr key={item.id} className="print-avoid-break">
                 <td className="py-2">{i + 1}</td>
-                <td className="cell-wrap py-2">{item.part.partNo}</td>
-                <td className="cell-wrap py-2">{item.part.description}</td>
                 <td className="cell-wrap py-2">
-                  <CategoryBadge category={item.part.category} />
+                  <p className="font-semibold text-slate-900">{item.part.description}</p>
+                  <p className="text-xs text-slate-500">{item.part.partNo}</p>
                 </td>
+                <td className="cell-wrap py-2">{PART_CATEGORY_LABELS[item.part.category as PartCategoryCode] ?? item.part.category}</td>
                 <td className="cell-wrap py-2 text-xs text-slate-600">
                   {item.inventory.store.name} / {item.inventory.bin.code} / {item.inventory.rack.code}
                 </td>
-                <td className="py-2 text-right">{item.quantity} {item.part.unit}</td>
-                <td className="py-2 text-right">{item.returnedQty}</td>
-                <td className="py-2 text-right">{Number(item.mrp).toLocaleString("en-IN")}</td>
-                <td className="py-2 text-right font-medium">{issueItemTotal(item).toLocaleString("en-IN")}</td>
+                <td className="cell-wrap py-2 text-right">{item.quantity}</td>
+                <td className="cell-wrap py-2">{item.part.unit}</td>
+                <td className="cell-wrap py-2 text-right">{item.returnedQty}</td>
+                <td className="cell-wrap py-2 text-right">{Number(item.mrp).toLocaleString("en-IN")}</td>
+                <td className="cell-wrap py-2 text-right font-medium">{issueItemTotal(item).toLocaleString("en-IN")}</td>
               </tr>
             ))}
           </tbody>

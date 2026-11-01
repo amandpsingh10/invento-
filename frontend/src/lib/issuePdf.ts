@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import type { Issue, IssueItem } from "@/types";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { PRODUCT_NAME } from "@/lib/branding";
+import { PART_CATEGORY_LABELS, type PartCategoryCode } from "@/lib/partCategory";
 
 export function issueItemTotal(item: Pick<IssueItem, "mrp" | "quantity">): number {
   return Number(item.mrp) * item.quantity;
@@ -109,33 +110,41 @@ export function buildIssuePdf(
   doc.setLineWidth(0.2);
   y += 8;
 
-  // Line-items table
+  // Line-items table — Part No and Description share one "Part Details"
+  // column (two stacked lines, same as the invoice PDF's layout) instead
+  // of two separate columns, and Qty/Unit are two columns instead of one
+  // combined string. The old 9-column layout packed columns edge-to-edge
+  // with barely any gap, which is exactly where long category/location
+  // text would run into its neighbor — these widths/gaps are deliberately
+  // more conservative.
   type Col = { key: keyof RowValues; label: string; x: number; align: "left" | "right"; width: number };
   interface RowValues {
     sno: string;
-    partNo: string;
     description: string;
+    partNo: string;
     category: string;
     location: string;
     qty: string;
+    unit: string;
     returned: string;
     mrp: string;
     total: string;
   }
   const cols: Col[] = [
-    { key: "sno", label: "S.No", x: marginX, align: "left", width: 8 },
-    { key: "partNo", label: "Part No", x: marginX + 8, align: "left", width: 22 },
-    { key: "description", label: "Description", x: marginX + 30, align: "left", width: 34 },
-    { key: "category", label: "Category", x: marginX + 64, align: "left", width: 20 },
-    { key: "location", label: "Location", x: marginX + 84, align: "left", width: 34 },
-    { key: "qty", label: "Qty Iss.", x: marginX + 128, align: "right", width: 16 },
-    { key: "returned", label: "Qty Ret.", x: marginX + 144, align: "right", width: 14 },
-    { key: "mrp", label: "MRP", x: marginX + 165, align: "right", width: 13 },
-    { key: "total", label: "Total", x: pageWidth - marginX, align: "right", width: 15 },
+    { key: "sno", label: "S.No", x: marginX, align: "left", width: 7 },
+    { key: "description", label: "Part Details", x: marginX + 8, align: "left", width: 38 },
+    { key: "category", label: "Category", x: marginX + 48, align: "left", width: 22 },
+    { key: "location", label: "Location", x: marginX + 72, align: "left", width: 26 },
+    { key: "qty", label: "Qty Issued", x: marginX + 116, align: "right", width: 12 },
+    { key: "unit", label: "Unit", x: marginX + 119, align: "left", width: 12 },
+    { key: "returned", label: "Qty Ret.", x: marginX + 145, align: "right", width: 12 },
+    { key: "mrp", label: "MRP", x: marginX + 163, align: "right", width: 16 },
+    { key: "total", label: "Total", x: pageWidth - marginX, align: "right", width: 17 },
   ];
 
+  const headerRowHeight = 7;
   doc.setFillColor(30, 41, 59);
-  doc.rect(marginX, y, pageWidth - marginX * 2, 7, "F");
+  doc.rect(marginX, y, pageWidth - marginX * 2, headerRowHeight, "F");
   doc.setTextColor(255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(6.8);
@@ -143,28 +152,45 @@ export function buildIssuePdf(
     doc.text(col.label.toUpperCase(), col.align === "right" ? col.x : col.x + 1.5, y + 4.8, { align: col.align });
   }
   doc.setTextColor(0);
-  y += 7;
+  y += headerRowHeight;
 
-  doc.setFont("helvetica", "normal");
   doc.setFontSize(7.8);
   issue.items.forEach((item, i) => {
-    const rowHeight = 7;
+    // Taller than the header row — Part Details draws two stacked lines
+    // (description, then part no) within it.
+    const rowHeight = 9.5;
     doc.setDrawColor(230);
     doc.line(marginX, y + rowHeight, pageWidth - marginX, y + rowHeight);
-    const values: RowValues = {
+
+    const partDetailsCol = cols.find((c) => c.key === "description")!;
+    const descLine = doc.splitTextToSize(item.part.description, partDetailsCol.width)[0] ?? item.part.description;
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text(descLine, partDetailsCol.x + 1.5, y + 4.2);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.8);
+    doc.setTextColor(110);
+    const partNoLine = doc.splitTextToSize(item.part.partNo, partDetailsCol.width)[0] ?? item.part.partNo;
+    doc.text(partNoLine, partDetailsCol.x + 1.5, y + 7.8);
+    doc.setFontSize(7.8);
+    doc.setTextColor(0);
+
+    const values: Omit<RowValues, "description" | "partNo"> = {
       sno: `${i + 1}`,
-      partNo: item.part.partNo,
-      description: item.part.description.length > 20 ? `${item.part.description.slice(0, 19)}…` : item.part.description,
-      category: item.part.category,
+      category: PART_CATEGORY_LABELS[item.part.category as PartCategoryCode] ?? item.part.category,
       location: `${item.inventory.store.code}/${item.inventory.bin.code}/${item.inventory.rack.code}`,
-      qty: `${item.quantity} ${item.part.unit}`,
+      qty: `${item.quantity}`,
+      unit: item.part.unit,
       returned: `${item.returnedQty}`,
       mrp: Number(item.mrp).toLocaleString("en-IN"),
       total: issueItemTotal(item).toLocaleString("en-IN"),
     };
+    const rowY = y + 6.2;
     for (const col of cols) {
-      const text: string = doc.splitTextToSize(values[col.key], col.width)[0] ?? values[col.key];
-      doc.text(text, col.align === "right" ? col.x : col.x + 1.5, y + 4.8, { align: col.align });
+      if (col.key === "description") continue; // drawn above as the two-line block
+      const value = values[col.key as keyof typeof values];
+      const text: string = doc.splitTextToSize(value, col.width)[0] ?? value;
+      doc.text(text, col.align === "right" ? col.x : col.x + 1.5, rowY, { align: col.align });
     }
     y += rowHeight;
   });
