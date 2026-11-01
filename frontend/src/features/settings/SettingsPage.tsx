@@ -58,38 +58,41 @@ export function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-5">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
-                <Building2 className="h-5 w-5" />
-              </div>
-              <p className="text-base font-bold text-slate-900 dark:text-slate-100">Dealership Information</p>
-            </div>
-            <div className="space-y-3 text-sm">
-              <div>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Dealer Name</p>
-                <p className="font-medium text-slate-700 dark:text-slate-300">{tenant?.name}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Dealer Code</p>
-                <p className="font-medium text-slate-700 dark:text-slate-300">{tenant?.dealerCode}</p>
-              </div>
-              {tenant?.address && (
-                <div>
-                  <p className="text-xs text-slate-400 dark:text-slate-500">Dealer Address</p>
-                  <p className="font-medium text-slate-700 dark:text-slate-300">{tenant.address}</p>
+        {/* Super Admin has no tenant — only a dealer-side user sees their dealership's own info here. */}
+        {tenant && (
+          <Card>
+            <CardContent className="p-5">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
+                  <Building2 className="h-5 w-5" />
                 </div>
-              )}
-              {tenant?.status && (
+                <p className="text-base font-bold text-slate-900 dark:text-slate-100">Dealership Information</p>
+              </div>
+              <div className="space-y-3 text-sm">
                 <div>
-                  <p className="text-xs text-slate-400 dark:text-slate-500">Status</p>
-                  <Badge tone="success">{tenant.status}</Badge>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">Dealer Name</p>
+                  <p className="font-medium text-slate-700 dark:text-slate-300">{tenant.name}</p>
                 </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                <div>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">Dealer Code</p>
+                  <p className="font-medium text-slate-700 dark:text-slate-300">{tenant.dealerCode}</p>
+                </div>
+                {tenant.address && (
+                  <div>
+                    <p className="text-xs text-slate-400 dark:text-slate-500">Dealer Address</p>
+                    <p className="font-medium text-slate-700 dark:text-slate-300">{tenant.address}</p>
+                  </div>
+                )}
+                {tenant.status && (
+                  <div>
+                    <p className="text-xs text-slate-400 dark:text-slate-500">Status</p>
+                    <Badge tone="success">{tenant.status}</Badge>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="lg:col-span-2">
           <CardContent className="p-5">

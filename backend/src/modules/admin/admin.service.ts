@@ -4,6 +4,27 @@ import { hashPassword } from "../../lib/password";
 import type { z } from "zod";
 import type { createTenantSchema, updateTenantSchema, updatePlanSchema, createPlanSchema } from "./admin.schema";
 
+/** Flat, read-only list of every dealer-side user across every tenant — for the Super Admin's platform-wide Users page. Managing one (role/status/menu access) still happens per-dealer via DealerUsersPage/admin.routes tenant endpoints; this is a directory view only. */
+export async function listAllUsers() {
+  const users = await prisma.user.findMany({
+    where: { tenantId: { not: null } },
+    include: { tenant: { select: { name: true, dealerCode: true } }, userRoles: { include: { role: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  return users.map((u) => ({
+    id: u.id,
+    firstName: u.firstName,
+    lastName: u.lastName,
+    mobile: u.mobile,
+    email: u.email,
+    isActive: u.isActive,
+    lastLoginAt: u.lastLoginAt,
+    roles: u.userRoles.map((ur) => ur.role.name),
+    tenantName: u.tenant?.name ?? null,
+    dealerCode: u.tenant?.dealerCode ?? null,
+  }));
+}
+
 export async function listTenants() {
   const tenants = await prisma.tenant.findMany({
     orderBy: { createdAt: "desc" },

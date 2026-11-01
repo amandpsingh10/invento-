@@ -46,6 +46,14 @@ router.put(
 );
 
 router.get(
+  "/users",
+  asyncHandler(async (_req, res) => {
+    const users = await adminService.listAllUsers();
+    res.json({ success: true, data: users });
+  })
+);
+
+router.get(
   "/tenants",
   asyncHandler(async (_req, res) => {
     const tenants = await adminService.listTenants();

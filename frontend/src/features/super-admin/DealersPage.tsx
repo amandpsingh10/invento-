@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Pencil, Plus, Power, PowerOff, Users } from "lucide-react";
 import { apiClient, getApiErrorMessage } from "@/lib/apiClient";
 import type { DealerTenant, Plan } from "@/types";
@@ -51,6 +51,22 @@ export function DealersPage() {
   const [editError, setEditError] = useState<string | null>(null);
   const { push } = useToast();
   const queryClient = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // The dashboard's "Add dealer" / "Onboard a dealer" actions land here with
+  // this flag so Create Dealer opens immediately instead of making the
+  // dealer click it again. Cleared from history right away so a later
+  // back-navigation or refresh doesn't reopen it.
+  useEffect(() => {
+    if ((location.state as { openCreate?: boolean } | null)?.openCreate) {
+      setForm(emptyForm);
+      setError(null);
+      setOpen(true);
+      navigate(location.pathname, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-tenants"],

@@ -304,6 +304,20 @@ export interface AppUser {
   createdAt: string;
 }
 
+/** A dealer-side user as listed on the Super Admin's platform-wide Users directory — read-only, across every tenant. */
+export interface PlatformUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  mobile: string;
+  email: string;
+  isActive: boolean;
+  lastLoginAt: string | null;
+  roles: RoleName[];
+  tenantName: string | null;
+  dealerCode: string | null;
+}
+
 export interface NotificationItem {
   id: string;
   type: string;
