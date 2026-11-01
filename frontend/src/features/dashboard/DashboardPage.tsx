@@ -239,10 +239,28 @@ export function DashboardPage() {
         </div>
 
         <div className="mb-4 grid grid-cols-4 gap-3">
-          <DeskStat to="/inventory/current-stock" dot="bg-brand-500" label="Current Stock" value={cards === undefined ? "—" : formatNumber(cards.totalStockQuantity)} />
-          <DeskStat to="/inventory/low-stock" dot="bg-amber-500" label="Low Stock" value={lowStock === undefined ? "—" : formatNumber(lowStock.total)} />
-          <DeskStat to="/invoices" dot="bg-emerald-500" label="Sales History" value={recentSales === undefined ? "—" : formatNumber(recentSales.total)} />
-          <DeskStat to="/inventory/add" dot="bg-slate-400" label="Add Inventory" value="+" />
+          <DeskStat
+            to="/inventory/current-stock"
+            icon={Warehouse}
+            iconTone="bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400"
+            label="Current Stock"
+            value={cards === undefined ? "—" : formatNumber(cards.totalStockQuantity)}
+          />
+          <DeskStat
+            to="/inventory/low-stock"
+            icon={AlertTriangle}
+            iconTone="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400"
+            label="Low Stock"
+            value={lowStock === undefined ? "—" : formatNumber(lowStock.total)}
+          />
+          <DeskStat
+            to="/invoices"
+            icon={Receipt}
+            iconTone="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
+            label="Sales History"
+            value={recentSales === undefined ? "—" : formatNumber(recentSales.total)}
+          />
+          <DeskStat to="/inventory/add" icon={PackagePlus} iconTone="bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400" label="Add Inventory" value="+" />
         </div>
 
         <Card className="mb-4">
@@ -331,14 +349,31 @@ export function DashboardPage() {
   );
 }
 
-function DeskStat({ to, dot, label, value }: { to: string; dot: string; label: string; value: string }) {
+function DeskStat({
+  to,
+  icon: Icon,
+  iconTone,
+  label,
+  value,
+}: {
+  to: string;
+  icon: any;
+  iconTone: string;
+  label: string;
+  value: string;
+}) {
   return (
-    <Link to={to} className="min-w-0 rounded-xl border border-slate-200 bg-white p-3.5 shadow-card transition-shadow hover:shadow-card-hover dark:border-navy-700 dark:bg-navy-900">
-      <p className="flex items-center gap-1.5 truncate text-[11.5px] text-slate-500 dark:text-slate-400">
-        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
-        {label}
-      </p>
-      <p className="mt-1.5 text-xl font-bold tabular-nums tracking-tight text-slate-900 dark:text-slate-100">{value}</p>
+    <Link
+      to={to}
+      className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-white p-3.5 shadow-card transition-shadow hover:shadow-card-hover dark:border-navy-700 dark:bg-navy-900"
+    >
+      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconTone}`}>
+        <Icon className="h-4.5 w-4.5" />
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-[11.5px] text-slate-500 dark:text-slate-400">{label}</p>
+        <p className="text-xl font-bold tabular-nums tracking-tight text-slate-900 dark:text-slate-100">{value}</p>
+      </div>
     </Link>
   );
 }
