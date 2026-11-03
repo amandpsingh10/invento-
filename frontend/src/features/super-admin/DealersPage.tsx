@@ -248,7 +248,13 @@ export function DealersPage() {
               </div>
               <div>
                 <Label>Phone</Label>
-                <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                <Input
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                />
               </div>
               <div>
                 <Label>Email</Label>
@@ -337,7 +343,13 @@ export function DealersPage() {
             </div>
             <div>
               <Label>Phone</Label>
-              <Input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
+              <Input
+                type="tel"
+                inputMode="numeric"
+                maxLength={10}
+                value={editForm.phone}
+                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+              />
             </div>
             <div className="col-span-2">
               <Label>Address</Label>

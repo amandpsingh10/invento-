@@ -32,6 +32,12 @@ export function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { rememberMe: true } });
 
+  // register()'s own onChange has no transform — maxLength alone caps
+  // length but doesn't stop letters/symbols from being typed, only
+  // rejected later at submit. Capture it so a custom onChange below can
+  // strip non-digits in place before handing the event back to it.
+  const mobileField = register("mobile");
+
   async function onSubmit(values: FormValues) {
     setServerError(null);
     try {
@@ -91,7 +97,11 @@ export function LoginPage() {
                   placeholder="9876543210"
                   autoComplete="tel"
                   className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50/60 pl-[4.5rem] pr-3.5 text-[15px] font-medium tracking-wide text-slate-900 placeholder:font-normal placeholder:text-slate-400 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-500/15 dark:border-navy-700 dark:bg-navy-800/60 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:bg-navy-900"
-                  {...register("mobile")}
+                  {...mobileField}
+                  onChange={(e) => {
+                    e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10);
+                    mobileField.onChange(e);
+                  }}
                 />
               </div>
               <FieldError message={errors.mobile?.message} />
