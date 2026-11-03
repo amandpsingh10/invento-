@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Users, Store, Boxes, Receipt, Sheet, HardDrive, ListChecks, Calculator, ArrowDown } from "lucide-react";
 import { apiClient, getApiErrorMessage } from "@/lib/apiClient";
@@ -58,11 +58,15 @@ export function PlansPage() {
   const { data: dealers } = useQuery({
     queryKey: ["admin-tenants-lite"],
     queryFn: async () => (await apiClient.get<{ data: { id: string; name: string; dealerCode: string }[] }>("/admin/tenants")).data.data,
-    enabled: !creating && !!editing?.isCustom,
+    enabled: form.isCustom,
   });
 
+  async function tagPlanToDealer(planCode: string, dealerId: string) {
+    await apiClient.put(`/admin/tenants/${dealerId}/plan`, { planCode });
+  }
+
   const tagToDealer = useMutation({
-    mutationFn: async () => apiClient.put(`/admin/tenants/${tagDealerId}/plan`, { planCode: editing!.code }),
+    mutationFn: async () => tagPlanToDealer(editing!.code, tagDealerId),
     onSuccess: () => {
       push({ tone: "success", title: "Plan tagged to dealer" });
       setTagDealerId("");
@@ -91,9 +95,21 @@ export function PlansPage() {
       if (creating) return apiClient.post("/admin/plans", { ...payload, code: form.code.trim() });
       return apiClient.put(`/admin/plans/${editing!.id}`, payload);
     },
-    onSuccess: () => {
-      push({ tone: "success", title: creating ? "Plan created" : "Plan updated" });
+    onSuccess: async () => {
+      // Creating a custom plan with a dealer already picked tags it
+      // immediately — no need to re-open Edit just to assign it.
+      if (creating && form.isCustom && tagDealerId) {
+        try {
+          await tagPlanToDealer(form.code.trim(), tagDealerId);
+          push({ tone: "success", title: "Plan created and tagged to dealer" });
+        } catch (err) {
+          push({ tone: "error", title: "Plan created, but tagging failed", description: getApiErrorMessage(err) });
+        }
+      } else {
+        push({ tone: "success", title: creating ? "Plan created" : "Plan updated" });
+      }
       queryClient.invalidateQueries({ queryKey: ["admin-plans"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-tenants"] });
       setEditing(null);
       setCreating(false);
     },
@@ -139,6 +155,17 @@ export function PlansPage() {
   const calcMonthly = (Number(calcRates.base) || 0) + (Number(form.maxUsers) || 0) * (Number(calcRates.perUser) || 0) + checkedMenuCount * (Number(calcRates.perMenu) || 0);
   const calcTotal = form.billingCycle === "ANNUAL" ? calcMonthly * 10 : calcMonthly;
   const calcTotalAfterDiscount = calcTotal * (1 - (Number(discountPercent) || 0) / 100);
+
+  // A Custom plan's price is entirely formula-driven (fixed rates + users +
+  // menus + discount) — keep priceMonthly in sync automatically instead of
+  // relying on "Use this price" being clicked, so the discount always
+  // actually reaches the saved price.
+  useEffect(() => {
+    if (!form.isCustom) return;
+    const rounded = String(Math.round(calcTotalAfterDiscount));
+    setForm((f) => (f.priceMonthly === rounded ? f : { ...f, priceMonthly: rounded }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.isCustom, calcTotalAfterDiscount]);
 
   // Trial is the automatic 14-day onboarding state every new dealer starts
   // on (see Create Dealer) rather than something a dealer subscribes to —
@@ -291,7 +318,16 @@ export function PlansPage() {
           </div>
           <div>
             <Label>Price / {form.billingCycle === "ANNUAL" ? "Year" : "Month"} (₹)</Label>
-            <Input type="number" min={0} value={form.priceMonthly} onChange={(e) => setForm({ ...form, priceMonthly: e.target.value })} />
+            <Input
+              type="number"
+              min={0}
+              disabled={form.isCustom}
+              value={form.priceMonthly}
+              onChange={(e) => setForm({ ...form, priceMonthly: e.target.value })}
+            />
+            {form.isCustom && (
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Computed automatically from the fixed rates, users, menus and discount below.</p>
+            )}
           </div>
 
           <div className="rounded-xl border border-dashed border-brand-300 bg-brand-50/40 p-3.5 dark:border-brand-500/40 dark:bg-brand-500/5">
@@ -347,7 +383,8 @@ export function PlansPage() {
             <div className="mt-2.5 flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-navy-700 dark:bg-navy-900">
               <div>
                 <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                  {form.isCustom && Number(discountPercent) > 0 ? "Suggested price (after discount)" : "Suggested price"}
+                  {form.isCustom ? "Final price (auto-applied above)" : "Suggested price"}
+                  {form.isCustom && Number(discountPercent) > 0 ? " — after discount" : ""}
                 </p>
                 {form.isCustom && Number(discountPercent) > 0 && (
                   <p className="text-[11px] text-slate-400 line-through dark:text-slate-500">{formatCurrency(calcTotal)}</p>
@@ -356,9 +393,11 @@ export function PlansPage() {
                   {formatCurrency(calcTotalAfterDiscount)} / {form.billingCycle === "ANNUAL" ? "year" : "month"}
                 </p>
               </div>
-              <Button type="button" size="sm" variant="outline" onClick={() => setForm({ ...form, priceMonthly: String(Math.round(calcTotalAfterDiscount)) })}>
-                <ArrowDown className="h-3.5 w-3.5" /> Use this price
-              </Button>
+              {!form.isCustom && (
+                <Button type="button" size="sm" variant="outline" onClick={() => setForm({ ...form, priceMonthly: String(Math.round(calcTotalAfterDiscount)) })}>
+                  <ArrowDown className="h-3.5 w-3.5" /> Use this price
+                </Button>
+              )}
             </div>
           </div>
 
@@ -418,10 +457,14 @@ export function PlansPage() {
             Custom plan (hidden from the dealer self-service plan screen — assign it directly from a dealer's profile instead)
           </label>
 
-          {!creating && form.isCustom && (
+          {form.isCustom && (
             <div className="rounded-xl border border-dashed border-purple-300 bg-purple-50/40 p-3.5 dark:border-purple-500/40 dark:bg-purple-500/5">
               <p className="mb-2.5 text-xs font-bold uppercase tracking-wide text-purple-700 dark:text-purple-400">Tag to dealer</p>
-              <p className="mb-2 text-[11px] text-slate-500 dark:text-slate-400">Assign this custom plan directly to a dealer.</p>
+              <p className="mb-2 text-[11px] text-slate-500 dark:text-slate-400">
+                {creating
+                  ? "Pick a dealer — they'll be moved onto this plan as soon as it's created."
+                  : "Assign this custom plan directly to a dealer."}
+              </p>
               <div className="flex gap-2">
                 <Select className="flex-1" value={tagDealerId} onChange={(e) => setTagDealerId(e.target.value)}>
                   <option value="">Select a dealer…</option>
@@ -431,16 +474,18 @@ export function PlansPage() {
                     </option>
                   ))}
                 </Select>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={!tagDealerId}
-                  isLoading={tagToDealer.isPending}
-                  onClick={() => tagToDealer.mutate()}
-                >
-                  Tag
-                </Button>
+                {!creating && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={!tagDealerId}
+                    isLoading={tagToDealer.isPending}
+                    onClick={() => tagToDealer.mutate()}
+                  >
+                    Tag
+                  </Button>
+                )}
               </div>
             </div>
           )}
