@@ -350,6 +350,21 @@ export function PlansPage() {
             )}
           </div>
 
+          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-navy-600"
+              checked={form.isCustom}
+              onChange={(e) => {
+                const isCustom = e.target.checked;
+                setForm({ ...form, isCustom });
+                setCalcRates(isCustom ? CUSTOM_CALC_RATES : DEFAULT_CALC_RATES);
+                if (!isCustom) setDiscountPercent("0");
+              }}
+            />
+            Custom plan — check this first to switch the calculator below to fixed rates (hidden from the dealer self-service plan screen; assign it directly from a dealer's profile instead)
+          </label>
+
           <div className="rounded-xl border border-dashed border-brand-300 bg-brand-50/40 p-3.5 dark:border-brand-500/40 dark:bg-brand-500/5">
             <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-brand-700 dark:text-brand-400">
               <Calculator className="h-3.5 w-3.5" /> Pricing calculator
@@ -461,20 +476,6 @@ export function PlansPage() {
               onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
             />
             Active (selectable when onboarding a new dealer)
-          </label>
-          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-navy-600"
-              checked={form.isCustom}
-              onChange={(e) => {
-                const isCustom = e.target.checked;
-                setForm({ ...form, isCustom });
-                setCalcRates(isCustom ? CUSTOM_CALC_RATES : DEFAULT_CALC_RATES);
-                if (!isCustom) setDiscountPercent("0");
-              }}
-            />
-            Custom plan (hidden from the dealer self-service plan screen — assign it directly from a dealer's profile instead)
           </label>
 
           {form.isCustom && (
