@@ -19,17 +19,18 @@ export function ProtectedRoute({ roles, menuKey }: { roles?: RoleName[]; menuKey
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (roles && !hasRole(...roles)) {
+  // A route with a menuKey is governed entirely by canAccessMenu, which
+  // already folds the role check in (see makeMenuAccessCheck): an explicit
+  // per-user grant wins even over the role gate, so a menu item a Tenant
+  // Admin turns on for someone is actually reachable, not just visible in
+  // the sidebar. A route with no menuKey has no override mechanism at all,
+  // so it stays a plain role gate.
+  if (menuKey) {
+    if (!canAccessMenu(menuKey, roles)) {
+      return <Navigate to="/no-access" replace />;
+    }
+  } else if (roles && !hasRole(...roles)) {
     return <Navigate to="/dashboard" replace />;
-  }
-
-  // Distinct from the role check above: a role failure means "you're not
-  // the right kind of user" (bounced to the dashboard you do have). A menu
-  // failure means Super Admin explicitly revoked this specific item from
-  // this user, so it goes to a dedicated page instead — bouncing to
-  // /dashboard here could loop if dashboard itself was ever revoked too.
-  if (menuKey && !canAccessMenu(menuKey, roles)) {
-    return <Navigate to="/no-access" replace />;
   }
 
   return <Outlet />;
