@@ -141,7 +141,8 @@ function BigActionButton({
  * Return off the first screen, so mobile stops at the 4 cards + 2 buttons.
  */
 export function DashboardPage() {
-  const { user, tenant } = useAuth();
+  const { user, tenant, hasRole } = useAuth();
+  const isTenantAdmin = hasRole("TENANT_ADMIN");
   const { data: cards } = useDashboardCards();
   const { data: lowStock } = useLowStockPreview();
   const { data: recentSales } = useRecentSales();
@@ -263,6 +264,7 @@ export function DashboardPage() {
           <DeskStat to="/inventory/add" icon={PackagePlus} iconTone="bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400" label="Add Inventory" value="+" />
         </div>
 
+        {isTenantAdmin && (
         <Card className="mb-4">
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5 dark:border-navy-800">
             <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Recent Sales</p>
@@ -305,7 +307,9 @@ export function DashboardPage() {
             <EmptyState title="No sales yet" description="Completed sales will show up here." />
           )}
         </Card>
+        )}
 
+        {isTenantAdmin && (
         <Card>
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5 dark:border-navy-800">
             <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Low Stock Parts</p>
@@ -344,6 +348,7 @@ export function DashboardPage() {
             <EmptyState title="Nothing low on stock" description="Every part is above its threshold. Nice work." />
           )}
         </Card>
+        )}
       </div>
     </div>
   );
