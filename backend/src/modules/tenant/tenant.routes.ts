@@ -3,7 +3,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { requireAuth } from "../../middleware/auth.middleware";
 import { requireTenant, requireTenantId } from "../../middleware/tenant.middleware";
 import { requireRole, ROLE_GROUPS } from "../../middleware/rbac.middleware";
-import { selectPlanSchema } from "./tenant.schema";
+import { selectPlanSchema, createCustomPlanSchema } from "./tenant.schema";
 import * as tenantService from "./tenant.service";
 import { recordAudit } from "../audit/audit.service";
 
@@ -38,6 +38,26 @@ router.post(
       newValue: { planCode: plan.code },
     });
     res.json({ success: true, data: { status: tenant.status, planCode: plan.code, planName: plan.name } });
+  })
+);
+
+router.post(
+  "/custom-plan",
+  requireRole(...ROLE_GROUPS.canManageTenantSettings),
+  asyncHandler(async (req, res) => {
+    const tenantId = requireTenantId(req);
+    const input = createCustomPlanSchema.parse(req.body);
+    const { tenant, plan } = await tenantService.createCustomPlan(tenantId, input);
+    await recordAudit({
+      req,
+      tenantId,
+      userId: req.user!.id,
+      action: "CUSTOM_PLAN_CREATED",
+      entityType: "Tenant",
+      entityId: tenantId,
+      newValue: { planCode: plan.code, priceMonthly: plan.priceMonthly },
+    });
+    res.json({ success: true, data: { status: tenant.status, plan } });
   })
 );
 

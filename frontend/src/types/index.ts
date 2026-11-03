@@ -23,6 +23,7 @@ export interface TenantSummary {
   state?: string | null;
   status?: string;
   trialEndsAt?: string | null;
+  planEndsAt?: string | null;
 }
 
 export interface PagedResult<T> {

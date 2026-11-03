@@ -1,6 +1,7 @@
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../lib/apiError";
 import { hashPassword } from "../../lib/password";
+import { computeSubscriptionEndsAt } from "../../lib/billing";
 import type { z } from "zod";
 import type { createTenantSchema, updateTenantSchema, updatePlanSchema, createPlanSchema } from "./admin.schema";
 
@@ -88,7 +89,12 @@ export async function createTenant(input: z.infer<typeof createTenantSchema>) {
     });
 
     await tx.subscription.create({
-      data: { tenantId: tenant.id, planId: plan.id, status: input.planCode === "TRIAL" ? "TRIALING" : "ACTIVE" },
+      data: {
+        tenantId: tenant.id,
+        planId: plan.id,
+        status: input.planCode === "TRIAL" ? "TRIALING" : "ACTIVE",
+        endsAt: input.planCode === "TRIAL" ? null : computeSubscriptionEndsAt(new Date(), plan.billingCycle),
+      },
     });
 
     await tx.user.create({
@@ -131,7 +137,9 @@ export async function changeTenantPlan(tenantId: string, planCode: string) {
   const plan = await prisma.plan.findUnique({ where: { code: planCode } });
   if (!plan || !plan.isActive) throw ApiError.badRequest("Invalid or inactive plan");
 
-  await prisma.subscription.create({ data: { tenantId, planId: plan.id, status: "ACTIVE" } });
+  await prisma.subscription.create({
+    data: { tenantId, planId: plan.id, status: "ACTIVE", endsAt: computeSubscriptionEndsAt(new Date(), plan.billingCycle) },
+  });
   // A dealer moved onto a real plan is no longer on trial — mirrors what
   // the dealer's own self-service plan picker does on selectPlan.
   const updated = tenant.status === "TRIAL" ? await prisma.tenant.update({ where: { id: tenantId }, data: { status: "ACTIVE" } }) : tenant;

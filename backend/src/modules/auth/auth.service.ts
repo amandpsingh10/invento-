@@ -54,7 +54,10 @@ export async function login(input: { mobile: string; password: string }, req?: R
   // Mobile is globally unique (User.mobile @unique) — it alone identifies
   // both the user and, transitively, their tenant. No dealer code input
   // needed any more; a null tenant means a platform-level (super admin) user.
-  const user = await prisma.user.findUnique({ where: { mobile: input.mobile }, include: { tenant: true } });
+  const user = await prisma.user.findUnique({
+    where: { mobile: input.mobile },
+    include: { tenant: { include: { subscriptions: { orderBy: { createdAt: "desc" }, take: 1 } } } },
+  });
 
   if (!user || !user.isActive) {
     throw ApiError.unauthorized("Invalid mobile number or password", "INVALID_CREDENTIALS");
@@ -111,6 +114,7 @@ export async function login(input: { mobile: string; password: string }, req?: R
           state: user.tenant.state,
           status: user.tenant.status,
           trialEndsAt: user.tenant.trialEndsAt,
+          planEndsAt: user.tenant.subscriptions[0]?.endsAt ?? null,
         }
       : null,
   };
@@ -154,7 +158,7 @@ export async function logout(userId: string) {
 export async function getCurrentUser(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    include: { tenant: true },
+    include: { tenant: { include: { subscriptions: { orderBy: { createdAt: "desc" }, take: 1 } } } },
   });
   if (!user) throw ApiError.unauthorized();
   const roles = await loadUserRoles(user.id);
@@ -176,6 +180,7 @@ export async function getCurrentUser(userId: string) {
           state: user.tenant.state,
           status: user.tenant.status,
           trialEndsAt: user.tenant.trialEndsAt,
+          planEndsAt: user.tenant.subscriptions[0]?.endsAt ?? null,
         }
       : null,
   };
