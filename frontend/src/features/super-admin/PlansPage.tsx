@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Users, Store, Boxes, Receipt, Sheet, HardDrive, ListChecks, Calculator, ArrowDown } from "lucide-react";
+import { Pencil, Plus, Trash2, Users, Store, Boxes, Receipt, Sheet, HardDrive, ListChecks, Calculator, ArrowDown } from "lucide-react";
 import { apiClient, getApiErrorMessage } from "@/lib/apiClient";
 import type { Plan } from "@/types";
 import { PageHeader } from "@/components/ui/Feedback";
@@ -42,6 +42,7 @@ const emptyEditForm = {
 export function PlansPage() {
   const [editing, setEditing] = useState<Plan | null>(null);
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<Plan | null>(null);
   const [form, setForm] = useState(emptyEditForm);
   const [error, setError] = useState<string | null>(null);
   const [calcRates, setCalcRates] = useState(DEFAULT_CALC_RATES);
@@ -114,6 +115,16 @@ export function PlansPage() {
       setCreating(false);
     },
     onError: (err) => setError(getApiErrorMessage(err)),
+  });
+
+  const deletePlan = useMutation({
+    mutationFn: async () => apiClient.delete(`/admin/plans/${deleting!.id}`),
+    onSuccess: () => {
+      push({ tone: "success", title: "Plan deleted" });
+      queryClient.invalidateQueries({ queryKey: ["admin-plans"] });
+      setDeleting(null);
+    },
+    onError: (err) => push({ tone: "error", title: "Couldn't delete plan", description: getApiErrorMessage(err) }),
   });
 
   function openCreate() {
@@ -211,13 +222,22 @@ export function PlansPage() {
                         {plan.isCustom && <Badge tone="purple">Custom</Badge>}
                         <Badge tone={plan.isActive ? "success" : "neutral"}>{plan.isActive ? "Active" : "Inactive"}</Badge>
                       </div>
-                      <button
-                        onClick={() => openEdit(plan)}
-                        className="rounded-md p-1.5 text-slate-400 hover:bg-brand-50 hover:text-brand-600 dark:text-slate-500 dark:hover:bg-brand-500/15 dark:hover:text-brand-400"
-                        title="Edit plan"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => openEdit(plan)}
+                          className="rounded-md p-1.5 text-slate-400 hover:bg-brand-50 hover:text-brand-600 dark:text-slate-500 dark:hover:bg-brand-500/15 dark:hover:text-brand-400"
+                          title="Edit plan"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => setDeleting(plan)}
+                          className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:text-slate-500 dark:hover:bg-red-500/15 dark:hover:text-red-400"
+                          title="Delete plan"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                   {plan.description && <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">{plan.description}</p>}
@@ -534,6 +554,25 @@ export function PlansPage() {
             </div>
           </div>
         </div>
+      </Dialog>
+
+      <Dialog
+        open={!!deleting}
+        onOpenChange={(v) => !v && setDeleting(null)}
+        title="Delete Plan"
+        description={`Are you sure you want to delete "${deleting?.name ?? ""}"? This can't be undone. A plan that has ever had a dealer on it can't be deleted — deactivate it instead.`}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setDeleting(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" isLoading={deletePlan.isPending} onClick={() => deletePlan.mutate()}>
+              Delete Plan
+            </Button>
+          </>
+        }
+      >
+        <></>
       </Dialog>
     </div>
   );

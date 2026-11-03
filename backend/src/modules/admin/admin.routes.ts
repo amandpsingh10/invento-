@@ -45,6 +45,15 @@ router.put(
   })
 );
 
+router.delete(
+  "/plans/:id",
+  asyncHandler(async (req, res) => {
+    await adminService.deletePlan(req.params.id);
+    await recordAudit({ req, tenantId: null, userId: req.user!.id, action: "PLAN_DELETED", entityType: "Plan", entityId: req.params.id });
+    res.json({ success: true });
+  })
+);
+
 router.get(
   "/users",
   asyncHandler(async (_req, res) => {

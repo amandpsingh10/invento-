@@ -247,3 +247,25 @@ export async function createPlan(input: z.infer<typeof createPlanSchema>) {
   if (existing) throw ApiError.conflict(`Plan code "${input.code}" is already in use`, "DUPLICATE_PLAN_CODE");
   return prisma.plan.create({ data: input });
 }
+
+/**
+ * Only a plan no dealer has ever been on (no Subscription row at all, past
+ * or present) can be hard-deleted — otherwise it'd break that dealer's
+ * billing history and the FK would reject it anyway. Anything else should
+ * be deactivated (isActive: false) via updatePlan instead.
+ */
+export async function deletePlan(id: string) {
+  const plan = await prisma.plan.findUnique({ where: { id } });
+  if (!plan) throw ApiError.notFound("Plan not found");
+  if (plan.code === "TRIAL") throw ApiError.badRequest("The Trial plan can't be deleted", "TRIAL_PLAN_UNDELETABLE");
+
+  const subscriptionCount = await prisma.subscription.count({ where: { planId: id } });
+  if (subscriptionCount > 0) {
+    throw ApiError.conflict(
+      "This plan has dealers (past or present) subscribed to it and can't be deleted. Deactivate it instead.",
+      "PLAN_IN_USE"
+    );
+  }
+
+  await prisma.plan.delete({ where: { id } });
+}
