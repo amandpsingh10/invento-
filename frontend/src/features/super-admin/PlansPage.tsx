@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Users, Store, Boxes, Receipt, Sheet, HardDrive, ListChecks } from "lucide-react";
+import { Pencil, Plus, Users, Store, Boxes, Receipt, Sheet, HardDrive, ListChecks, Calculator, ArrowDown } from "lucide-react";
 import { apiClient, getApiErrorMessage } from "@/lib/apiClient";
 import type { Plan } from "@/types";
 import { PageHeader } from "@/components/ui/Feedback";
@@ -15,6 +15,8 @@ import { formatCurrency } from "@/lib/utils";
 import { PRIMARY_TABS, MORE_MENU_GROUPS } from "@/components/layout/moreMenuItems";
 
 const ALL_MENU_KEYS = [...PRIMARY_TABS.map((t) => t.key), ...MORE_MENU_GROUPS.flatMap((g) => g.items.map((i) => i.key))];
+
+const DEFAULT_CALC_RATES = { base: "0", perUser: "150", perMenu: "100" };
 
 const emptyEditForm = {
   code: "",
@@ -38,6 +40,7 @@ export function PlansPage() {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(emptyEditForm);
   const [error, setError] = useState<string | null>(null);
+  const [calcRates, setCalcRates] = useState(DEFAULT_CALC_RATES);
   const { push } = useToast();
   const queryClient = useQueryClient();
 
@@ -80,6 +83,7 @@ export function PlansPage() {
     setEditing(null);
     setForm(emptyEditForm);
     setError(null);
+    setCalcRates(DEFAULT_CALC_RATES);
   }
 
   function openEdit(plan: Plan) {
@@ -102,7 +106,12 @@ export function PlansPage() {
       allowedMenuKeys: Object.fromEntries(ALL_MENU_KEYS.map((k) => [k, plan.allowedMenuKeys.includes(k)])),
     });
     setError(null);
+    setCalcRates(DEFAULT_CALC_RATES);
   }
+
+  const checkedMenuCount = ALL_MENU_KEYS.filter((k) => form.allowedMenuKeys[k]).length;
+  const calcMonthly = (Number(calcRates.base) || 0) + (Number(form.maxUsers) || 0) * (Number(calcRates.perUser) || 0) + checkedMenuCount * (Number(calcRates.perMenu) || 0);
+  const calcTotal = form.billingCycle === "ANNUAL" ? calcMonthly * 10 : calcMonthly;
 
   // Trial is the automatic 14-day onboarding state every new dealer starts
   // on (see Create Dealer) rather than something a dealer subscribes to —
@@ -257,6 +266,41 @@ export function PlansPage() {
             <Label>Price / {form.billingCycle === "ANNUAL" ? "Year" : "Month"} (₹)</Label>
             <Input type="number" min={0} value={form.priceMonthly} onChange={(e) => setForm({ ...form, priceMonthly: e.target.value })} />
           </div>
+
+          <div className="rounded-xl border border-dashed border-brand-300 bg-brand-50/40 p-3.5 dark:border-brand-500/40 dark:bg-brand-500/5">
+            <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-brand-700 dark:text-brand-400">
+              <Calculator className="h-3.5 w-3.5" /> Pricing calculator
+            </p>
+            <div className="grid grid-cols-3 gap-2.5">
+              <div>
+                <Label className="text-xs">Base price (₹)</Label>
+                <Input type="number" min={0} value={calcRates.base} onChange={(e) => setCalcRates({ ...calcRates, base: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs">Per user (₹)</Label>
+                <Input type="number" min={0} value={calcRates.perUser} onChange={(e) => setCalcRates({ ...calcRates, perUser: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs">Per menu (₹)</Label>
+                <Input type="number" min={0} value={calcRates.perMenu} onChange={(e) => setCalcRates({ ...calcRates, perMenu: e.target.value })} />
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+              Uses Max Users and Menus Allowed below — {form.maxUsers || 0} users, {checkedMenuCount} of {ALL_MENU_KEYS.length} menus checked.
+            </p>
+            <div className="mt-2.5 flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-navy-700 dark:bg-navy-900">
+              <div>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">Suggested price</p>
+                <p className="text-sm font-bold tabular-nums text-brand-600 dark:text-brand-400">
+                  {formatCurrency(calcTotal)} / {form.billingCycle === "ANNUAL" ? "year" : "month"}
+                </p>
+              </div>
+              <Button type="button" size="sm" variant="outline" onClick={() => setForm({ ...form, priceMonthly: String(Math.round(calcTotal)) })}>
+                <ArrowDown className="h-3.5 w-3.5" /> Use this price
+              </Button>
+            </div>
+          </div>
+
           <div>
             <Label>Description</Label>
             <Textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
