@@ -162,7 +162,8 @@ export function PlansPage() {
   const checkedMenuCount = ALL_MENU_KEYS.filter((k) => form.allowedMenuKeys[k]).length;
   const calcMonthly = CALC_RATES.base + (Number(form.maxUsers) || 0) * CALC_RATES.perUser + checkedMenuCount * CALC_RATES.perMenu;
   const calcTotal = form.billingCycle === "ANNUAL" ? calcMonthly * 10 : calcMonthly;
-  const calcTotalAfterDiscount = calcTotal * (1 - (Number(discountPercent) || 0) / 100);
+  const clampedDiscountPercent = Math.min(100, Math.max(0, Number(discountPercent) || 0));
+  const calcTotalAfterDiscount = calcTotal * (1 - clampedDiscountPercent / 100);
 
   // A Custom plan's price is entirely formula-driven (fixed rates + users +
   // menus + discount) — keep priceMonthly in sync automatically instead of
@@ -387,7 +388,18 @@ export function PlansPage() {
             {form.isCustom && (
               <div className="mt-2.5">
                 <Label className="text-xs">Final discount (%)</Label>
-                <Input type="number" min={0} max={100} value={discountPercent} onChange={(e) => setDiscountPercent(e.target.value)} />
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={discountPercent}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === "") return setDiscountPercent("");
+                    const clamped = Math.min(100, Math.max(0, Number(raw) || 0));
+                    setDiscountPercent(String(clamped));
+                  }}
+                />
               </div>
             )}
 
